@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===============================================
+// 1. AUTHENTICATION MODELS (better-auth - DO NOT MODIFY)
+// ===============================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  // relaciones extendidas
+  profile        UserProfile?
+  memberships    OrganizationMember[]
+  subscriptions  Subscription?
+  dependencies   UserDependency[] @relation("UserDependsOn")
+  dependents     UserDependency[] @relation("UserIsDependedOn")
+
+  @@map("user") 
+  teamMembers TeamMember[]
+  organizations Organization[]
+  activationRedemptions ActivationRedemption[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session") 
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([accountId, providerId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("verification")
+}
+
+//
+// =================================================
+// 2. PROFILE, ROLES AND USER TYPE (IDENTITY)
+// =================================================
+//
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role      GlobalRole @default(USER)
+  isActive  Boolean    @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_profile")
+}
+
+enum GlobalRole {
+  USER
+  ADMIN
+  SUPERADMIN
+  SUPPORT
+}
+
+//
+// =================================================
+// 3. PLANS, LEVELS AND SUBSCRIPTION
+// =================================================
+//
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan      PlanType
+  status    SubscriptionStatus
+
+  startsAt  DateTime
+  endsAt    DateTime?
+
+  isTrial   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activationCodes ActivationRedemption[]
+
+  @@map("subscription")
+}
+
+enum PlanType {
+  FREE
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+  PAUSED
+}
+
+//
+// =================================================
+// 4. ACTIVATION CODES / LICENSES
+// =================================================
+//
+
+model ActivationCode {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  plan         PlanType
+  durationDays Int?     // null = permanent
+
+  maxUses      Int?
+  usedCount    Int      @default(0)
+
+  expiresAt    DateTime?
+  isActive     Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  redemptions  ActivationRedemption[]
+
+  @@map("activation_code")
+}
+
+model ActivationRedemption {
+  id              String   @id @default(cuid())
+  activationCodeId String
+  userId          String
+  subscriptionId  String?
+
+  activationCode ActivationCode @relation(fields: [activationCodeId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id])
+
+  redeemedAt DateTime @default(now())
+
+  @@unique([activationCodeId, userId])
+  @@map("activation_redemption")
+}
+
+//
+// =================================================
+// 5. ORGANIZATIONS, TEAMS AND GROUPS
+// =================================================
+//
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   OrganizationMember[]
+  teams     Team[]
+
+  @@map("organization")
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, userId])
+  @@map("organization_member")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Team {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  members       TeamMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("team")
+}
+
+model TeamMember {
+  id      String   @id @default(cuid())
+  teamId  String
+  userId  String
+  role    TeamRole
+
+  team    Team @relation(fields: [teamId], references: [id])
+  user    User @relation(fields: [userId], references: [id])
+
+  @@unique([teamId, userId])
+  @@map("team_member")
+}
+
+enum TeamRole {
+  LEAD
+  MEMBER
+}
+
+//
+// =================================================
+// 6. DEPENDENCIES / HIERARCHY AMONG USERS
+// =================================================
+//
+
+model UserDependency {
+  id            String   @id @default(cuid())
+  dependsOnId   String
+  dependentId   String
+
+  dependsOn     User @relation("UserDependsOn", fields: [dependsOnId], references: [id])
+  dependent     User @relation("UserIsDependedOn", fields: [dependentId], references: [id])
+
+  createdAt     DateTime @default(now())
+
+  @@unique([dependsOnId, dependentId])
+  @@map("user_dependency")
+}
