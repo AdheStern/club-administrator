@@ -21,20 +21,25 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts      Account[]
+  sessions      Session[]
 
   // relaciones extendidas
-  profile        UserProfile?
-  memberships    OrganizationMember[]
-  subscriptions  Subscription?
-  dependencies   UserDependency[] @relation("UserDependsOn")
-  dependents     UserDependency[] @relation("UserIsDependedOn")
+  profile       UserProfile?
+  memberships   OrganizationMember[]
+  subscriptions Subscription?
+  dependencies  UserDependency[]     @relation("UserDependsOn")
+  dependents    UserDependency[]     @relation("UserIsDependedOn")
 
-  @@map("user") 
-  teamMembers TeamMember[]
-  organizations Organization[]
+  teamMembers           TeamMember[]
+  organizations         Organization[]
   activationRedemptions ActivationRedemption[]
+
+  // Relaciones Club Discoteca (Nuevas)
+  reservationsSold    Reservation[] @relation("ReservationSeller")
+  reservationsManaged Reservation[] @relation("ReservationApprover")
+
+  @@map("user")
 }
 
 model Session {
@@ -48,7 +53,7 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("session") 
+  @@map("session")
 }
 
 model Account {
@@ -72,12 +77,12 @@ model Account {
 }
 
 model Verification {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   identifier String
-  value      String    @unique
+  value      String   @unique
   expiresAt  DateTime
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("verification")
 }
@@ -116,17 +121,17 @@ enum GlobalRole {
 //
 
 model Subscription {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String             @id @default(cuid())
+  userId   String             @unique
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  plan      PlanType
-  status    SubscriptionStatus
+  plan     PlanType
+  status   SubscriptionStatus
 
-  startsAt  DateTime
-  endsAt    DateTime?
+  startsAt DateTime
+  endsAt   DateTime?
 
-  isTrial   Boolean @default(false)
+  isTrial  Boolean            @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -156,19 +161,19 @@ enum SubscriptionStatus {
 //
 
 model ActivationCode {
-  id           String   @id @default(cuid())
-  code         String   @unique
+  id           String    @id @default(cuid())
+  code         String    @unique
   plan         PlanType
-  durationDays Int?     // null = permanent
+  durationDays Int? // null = permanent
 
   maxUses      Int?
-  usedCount    Int      @default(0)
+  usedCount    Int       @default(0)
 
   expiresAt    DateTime?
-  isActive     Boolean  @default(true)
+  isActive     Boolean   @default(true)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   redemptions  ActivationRedemption[]
 
@@ -176,16 +181,16 @@ model ActivationCode {
 }
 
 model ActivationRedemption {
-  id              String   @id @default(cuid())
+  id               String   @id @default(cuid())
   activationCodeId String
-  userId          String
-  subscriptionId  String?
+  userId           String
+  subscriptionId   String?
 
-  activationCode ActivationCode @relation(fields: [activationCodeId], references: [id])
-  user           User           @relation(fields: [userId], references: [id])
-  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id])
+  activationCode   ActivationCode @relation(fields: [activationCodeId], references: [id])
+  user             User           @relation(fields: [userId], references: [id])
+  subscription     Subscription?  @relation(fields: [subscriptionId], references: [id])
 
-  redeemedAt DateTime @default(now())
+  redeemedAt       DateTime @default(now())
 
   @@unique([activationCodeId, userId])
   @@map("activation_redemption")
@@ -209,6 +214,10 @@ model Organization {
   members   OrganizationMember[]
   teams     Team[]
 
+  // Relaciones del Club
+  tables    ClubTable[]
+  events    Event[]
+
   @@map("organization")
 }
 
@@ -216,12 +225,17 @@ model OrganizationMember {
   id             String   @id @default(cuid())
   organizationId String
   userId         String
+  
+  // Rol genérico del SaaS (Dueño/Admin/Miembro)
   role           OrgRole
+  
+  // Rol específico para el flujo de Discoteca
+  clubRole       ClubRole @default(SELLER)
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@unique([organizationId, userId])
   @@map("organization_member")
@@ -233,16 +247,22 @@ enum OrgRole {
   MEMBER
 }
 
+enum ClubRole {
+  ADMIN     // Crea mesas y eventos
+  APPROVER  // Aprueba reservas
+  SELLER    // Vende/Reserva
+}
+
 model Team {
   id             String   @id @default(cuid())
   name           String
   organizationId String
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  members       TeamMember[]
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  members        TeamMember[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@map("team")
 }
@@ -253,8 +273,8 @@ model TeamMember {
   userId  String
   role    TeamRole
 
-  team    Team @relation(fields: [teamId], references: [id])
-  user    User @relation(fields: [userId], references: [id])
+  team    Team     @relation(fields: [teamId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
 
   @@unique([teamId, userId])
   @@map("team_member")
@@ -272,15 +292,119 @@ enum TeamRole {
 //
 
 model UserDependency {
-  id            String   @id @default(cuid())
-  dependsOnId   String
-  dependentId   String
+  id          String   @id @default(cuid())
+  dependsOnId String
+  dependentId String
 
-  dependsOn     User @relation("UserDependsOn", fields: [dependsOnId], references: [id])
-  dependent     User @relation("UserIsDependedOn", fields: [dependentId], references: [id])
+  dependsOn   User     @relation("UserDependsOn", fields: [dependsOnId], references: [id])
+  dependent   User     @relation("UserIsDependedOn", fields: [dependentId], references: [id])
 
-  createdAt     DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@unique([dependsOnId, dependentId])
   @@map("user_dependency")
+}
+
+//
+// =================================================
+// 7. CLUB / NIGHTCLUB MANAGEMENT (NEW MODULE)
+// =================================================
+//
+
+model ClubTable {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  capacity       Int
+  isActive       Boolean  @default(true)
+  organizationId String?
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  eventInstances EventTableInstance[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("club_table")
+}
+
+model Event {
+  id             String   @id @default(cuid())
+  name           String
+  date           DateTime
+  organizationId String?
+
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  tables         EventTableInstance[]
+  reservations   Reservation[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("event")
+}
+
+model EventTableInstance {
+  id          String   @id @default(cuid())
+  eventId     String
+  tableId     String
+  
+  status      TableStatus @default(AVAILABLE)
+
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  table       ClubTable @relation(fields: [tableId], references: [id])
+
+  reservation Reservation?
+
+  @@unique([eventId, tableId])
+  @@map("event_table_instance")
+}
+
+enum TableStatus {
+  AVAILABLE
+  RESERVED
+  BLOCKED
+}
+
+model Reservation {
+  id               String   @id @default(cuid())
+  
+  eventId          String
+  tableInstanceId  String   @unique
+
+  event            Event              @relation(fields: [eventId], references: [id])
+  tableInstance    EventTableInstance @relation(fields: [tableInstanceId], references: [id])
+
+  customerName     String
+  customerDoc      String
+
+  extraGuests      Int      @default(0)
+  hasConsumption   Boolean  @default(false)
+  
+  status           ReservationStatus @default(PENDING)
+  notes            String?
+
+  createdAt        DateTime @default(now())
+  respondedAt      DateTime?
+
+  sellerId         String
+  seller           User     @relation("ReservationSeller", fields: [sellerId], references: [id])
+
+  approverId       String?
+  approver         User?    @relation("ReservationApprover", fields: [approverId], references: [id])
+
+  isTransferRequested Boolean @default(false) 
+
+  updatedAt        DateTime @updatedAt
+
+  @@map("reservation")
+}
+
+enum ReservationStatus {
+  PENDING
+  APPROVED
+  OBSERVED
+  REJECTED
+  CANCELLED
 }

@@ -28,6 +28,21 @@ const data = {
       icon: AppWindowIcon,
     },
     {
+      title: "Mesas",
+      url: "/tables",
+      icon: AppWindowIcon,
+    },
+    {
+      title: "Eventos",
+      url: "/events",
+      icon: AppWindowIcon,
+    },
+    {
+      title: "Reservas",
+      url: "/reservations",
+      icon: AppWindowIcon,
+    },
+    {
       title: "Usuarios",
       url: "/users",
       icon: UsersIcon,
