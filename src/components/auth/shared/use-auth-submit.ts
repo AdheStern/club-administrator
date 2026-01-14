@@ -19,7 +19,7 @@ type AuthAction = (...args: any[]) => Promise<AuthResponse>;
 
 export function useAuthSubmit(
   authAction: AuthAction,
-  successRedirect: string = "/aspire"
+  successRedirect: string = "/dashboard"
 ) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
