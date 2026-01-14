@@ -21,7 +21,7 @@ const audiowide = Audiowide({
 });
 
 export const metadata: Metadata = {
-  title: "Alpaca - Next.js Boilerplate",
+  title: "Jet Club",
   description: "A Next.js boilerplate with TypeScript, Tailwind CSS, and more.",
 };
 

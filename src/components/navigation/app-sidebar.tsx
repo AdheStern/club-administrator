@@ -28,8 +28,18 @@ const data = {
       icon: AppWindowIcon,
     },
     {
+      title: "Sectores",
+      url: "/sectors",
+      icon: AppWindowIcon,
+    },
+    {
       title: "Mesas",
       url: "/tables",
+      icon: AppWindowIcon,
+    },
+    {
+      title: "Paquetes",
+      url: "/packages",
       icon: AppWindowIcon,
     },
     {
@@ -39,12 +49,12 @@ const data = {
     },
     {
       title: "Reservas",
-      url: "/reservations",
+      url: "/requests",
       icon: AppWindowIcon,
     },
     {
-      title: "Usuarios",
-      url: "/users",
+      title: "Administración",
+      url: "/administration",
       icon: UsersIcon,
     },
     {

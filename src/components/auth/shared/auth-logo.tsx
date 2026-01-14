@@ -20,7 +20,7 @@ export function AuthLogo({ className }: AuthLogoProps) {
         className="flex items-center gap-2 font-2xl hover:text-green-500 transition-colors"
         style={{ fontFamily: "'Audiowide', sans-serif" }}
       >
-        ALPACA
+        JET CLUB
       </Link>
     </div>
   );
