@@ -3,12 +3,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -19,6 +21,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -42,6 +49,11 @@ import type {
   UserWithRelations,
 } from "@/lib/actions/types/action-types";
 import { createUser, updateUser } from "@/lib/actions/user-actions";
+import {
+  getAllSectors,
+  getUserSectors,
+  updateUserSectors,
+} from "@/lib/actions/user-sector-actions";
 
 const userFormSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
@@ -51,6 +63,7 @@ const userFormSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]),
   departmentId: z.string().optional(),
   managerId: z.string().optional(),
+  sectorIds: z.array(z.string()).optional(),
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
@@ -64,6 +77,11 @@ interface UserFormDrawerProps {
   onSuccess: () => void;
 }
 
+interface Sector {
+  id: string;
+  name: string;
+}
+
 export function UserFormDrawer({
   open,
   onOpenChange,
@@ -73,6 +91,8 @@ export function UserFormDrawer({
   onSuccess,
 }: UserFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
   const isEdit = !!user;
 
   const form = useForm<UserFormValues>({
@@ -85,31 +105,71 @@ export function UserFormDrawer({
       status: "ACTIVE",
       departmentId: "",
       managerId: "",
+      sectorIds: [],
     },
   });
 
   useEffect(() => {
-    if (user) {
-      form.reset({
-        name: user.name,
-        email: user.email,
-        role: user.role as UserRoleType,
-        status: user.status as UserStatusType,
-        departmentId: user.department?.id ?? "",
-        managerId: user.manager?.id ?? "",
-      });
-    } else {
-      form.reset({
-        name: "",
-        email: "",
-        password: "",
-        role: "USER",
-        status: "ACTIVE",
-        departmentId: "",
-        managerId: "",
-      });
+    const loadSectors = async () => {
+      const result = await getAllSectors();
+      if (result.success && result.data) {
+        setSectors(result.data);
+      }
+    };
+    loadSectors();
+  }, []);
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (user) {
+        const userSectorsResult = await getUserSectors(user.id);
+        const userSectorIds =
+          userSectorsResult.success && userSectorsResult.data
+            ? userSectorsResult.data.map((s) => s.id)
+            : [];
+
+        setSelectedSectors(userSectorIds);
+
+        form.reset({
+          name: user.name,
+          email: user.email,
+          role: user.role as UserRoleType,
+          status: user.status as UserStatusType,
+          departmentId: user.department?.id ?? "",
+          managerId: user.manager?.id ?? "",
+          sectorIds: userSectorIds,
+        });
+      } else {
+        setSelectedSectors([]);
+        form.reset({
+          name: "",
+          email: "",
+          password: "",
+          role: "USER",
+          status: "ACTIVE",
+          departmentId: "",
+          managerId: "",
+          sectorIds: [],
+        });
+      }
+    };
+
+    if (open) {
+      loadUserData();
     }
-  }, [user, form]);
+  }, [user, form, open]);
+
+  const toggleSector = (sectorId: string) => {
+    setSelectedSectors((prev) =>
+      prev.includes(sectorId)
+        ? prev.filter((id) => id !== sectorId)
+        : [...prev, sectorId]
+    );
+  };
+
+  const removeSector = (sectorId: string) => {
+    setSelectedSectors((prev) => prev.filter((id) => id !== sectorId));
+  };
 
   async function onSubmit(values: UserFormValues) {
     setIsLoading(true);
@@ -129,6 +189,7 @@ export function UserFormDrawer({
         const result = await updateUser(dto);
 
         if (result.success) {
+          await updateUserSectors(user.id, selectedSectors);
           toast.success("Usuario actualizado correctamente");
           onSuccess();
           onOpenChange(false);
@@ -148,7 +209,8 @@ export function UserFormDrawer({
 
         const result = await createUser(dto);
 
-        if (result.success) {
+        if (result.success && result.data) {
+          await updateUserSectors(result.data.id, selectedSectors);
           toast.success("Usuario creado correctamente");
           onSuccess();
           onOpenChange(false);
@@ -162,6 +224,10 @@ export function UserFormDrawer({
       setIsLoading(false);
     }
   }
+
+  const selectedSectorNames = sectors
+    .filter((s) => selectedSectors.includes(s.id))
+    .map((s) => s.name);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -235,7 +301,7 @@ export function UserFormDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      Dejar vacío para enviar email de activación
+                      Mínimo 8 caracteres con mayúsculas, minúsculas y números
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -353,6 +419,71 @@ export function UserFormDrawer({
                 </FormItem>
               )}
             />
+
+            <FormItem>
+              <FormLabel>Sectores permitidos</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                      type="button"
+                    >
+                      {selectedSectors.length === 0
+                        ? "Seleccionar sectores"
+                        : `${selectedSectors.length} sector(es) seleccionado(s)`}
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <div className="max-h-64 overflow-y-auto p-4 space-y-2">
+                    {sectors.map((sector) => (
+                      <div
+                        key={sector.id}
+                        className="flex items-center space-x-2"
+                      >
+                        <Checkbox
+                          id={sector.id}
+                          checked={selectedSectors.includes(sector.id)}
+                          onCheckedChange={() => toggleSector(sector.id)}
+                        />
+                        <label
+                          htmlFor={sector.id}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                        >
+                          {sector.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {selectedSectorNames.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedSectorNames.map((name, index) => (
+                    <Badge key={index} variant="secondary">
+                      {name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeSector(
+                            sectors.find((s) => s.name === name)?.id || ""
+                          )
+                        }
+                        className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <FormDescription>
+                Los usuarios pueden acceder solo a los sectores seleccionados.
+                Admins y Super Admins tienen acceso a todos.
+              </FormDescription>
+            </FormItem>
 
             <div className="flex gap-3 pt-4">
               <Button
