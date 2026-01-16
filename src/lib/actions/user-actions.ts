@@ -1,8 +1,7 @@
-// src/lib/actions/user-actions.ts
-
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
+import { hash } from "bcrypt";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import type {
@@ -15,9 +14,6 @@ import type {
   UserWithRelations,
 } from "./types/action-types";
 
-/**
- * Factory Pattern: Funciones de utilidad para crear usuarios
- */
 const UserFactory = {
   prepareUserData(dto: CreateUserDTO) {
     return {
@@ -34,9 +30,6 @@ const UserFactory = {
   },
 };
 
-/**
- * Strategy Pattern: Diferentes estrategias de validación
- */
 interface ValidationStrategy {
   validate(data: unknown): Promise<ActionResult<void>>;
 }
@@ -128,82 +121,42 @@ class HierarchyValidationStrategy implements ValidationStrategy {
   }
 }
 
-/**
- * Adapter Pattern: Adaptador para integración con Better Auth
- */
-class BetterAuthAdapter {
-  async createUserWithAuth(
-    name: string,
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; userId?: string; error?: string }> {
-    try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-      const response = await fetch(`${baseUrl}/api/auth/sign-up/email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
+class AuthCredentialManager {
+  async createPasswordHash(password: string): Promise<string> {
+    return await hash(password, 10);
+  }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        return {
-          success: false,
-          error: errorData.message || "Error al crear usuario en Better Auth",
-        };
-      }
-
-      const user = await db.user.findUnique({
-        where: { email },
-        select: { id: true },
-      });
-
-      return {
-        success: true,
-        userId: user?.id,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Error al comunicarse con Better Auth",
-      };
-    }
+  async createAuthAccount(userId: string, hashedPassword: string) {
+    return await db.account.create({
+      data: {
+        id: crypto.randomUUID(),
+        accountId: crypto.randomUUID(),
+        providerId: "credential",
+        userId,
+        password: hashedPassword,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
   }
 }
 
-/**
- * Repository Pattern: Abstrae el acceso a datos
- */
 class UserRepository {
-  private authAdapter = new BetterAuthAdapter();
+  private authManager = new AuthCredentialManager();
 
   async create(userData: CreateUserDTO) {
     const preparedData = UserFactory.prepareUserData(userData);
 
     if (userData.password) {
-      const authResult = await this.authAdapter.createUserWithAuth(
-        preparedData.name,
-        preparedData.email,
+      const hashedPassword = await this.authManager.createPasswordHash(
         userData.password
       );
 
-      if (!authResult.success) {
-        throw new Error(authResult.error);
-      }
-
-      return db.user.update({
-        where: { id: authResult.userId },
+      const user = await db.user.create({
         data: {
-          role: preparedData.role,
-          status: preparedData.status,
-          departmentId: preparedData.departmentId,
-          managerId: preparedData.managerId,
-          image: preparedData.image,
+          ...preparedData,
           emailVerified: true,
+          createdAt: new Date(),
           updatedAt: new Date(),
         },
         include: {
@@ -212,6 +165,10 @@ class UserRepository {
           subordinates: { select: { id: true, name: true } },
         },
       });
+
+      await this.authManager.createAuthAccount(user.id, hashedPassword);
+
+      return user;
     }
 
     return db.user.create({
@@ -316,9 +273,6 @@ class UserRepository {
   }
 }
 
-/**
- * Chain of Responsibility: Cadena de validaciones
- */
 abstract class ValidationHandler {
   protected next: ValidationHandler | null = null;
 
@@ -419,9 +373,6 @@ class PasswordValidationHandler extends ValidationHandler {
   }
 }
 
-/**
- * Facade Pattern: Interfaz simplificada para operaciones de usuario
- */
 class UserService {
   private repository = new UserRepository();
 
@@ -442,7 +393,7 @@ class UserService {
 
       const user = await this.repository.create(dto);
 
-      revalidatePath("/dashboard/admin/users");
+      revalidatePath("/administration/users");
 
       return {
         success: true,
@@ -471,7 +422,7 @@ class UserService {
 
       const user = await this.repository.update(dto.id, dto);
 
-      revalidatePath("/dashboard/admin/users");
+      revalidatePath("/administration/users");
 
       return {
         success: true,
@@ -558,7 +509,7 @@ class UserService {
 
       await this.repository.delete(id);
 
-      revalidatePath("/dashboard/admin/users");
+      revalidatePath("/administration/users");
 
       return { success: true };
     } catch (error) {
@@ -578,7 +529,7 @@ class UserService {
     try {
       await this.repository.updateStatus(id, status);
 
-      revalidatePath("/dashboard/admin/users");
+      revalidatePath("/administration/users");
 
       return { success: true };
     } catch (error) {
