@@ -1,9 +1,7 @@
-// src/components/system/requests/request-form-drawer.tsx
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -35,7 +33,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { createRequest, updateRequest } from "@/lib/actions/request-actions";
+import {
+  createRequest,
+  getAvailableTablesForEvent,
+  updateRequest,
+} from "@/lib/actions/request-actions";
 import type { EventWithRelations } from "@/lib/actions/types/event-types";
 import type { PackageWithRelations } from "@/lib/actions/types/package-types";
 import type {
@@ -71,6 +73,13 @@ const requestFormSchema = z.object({
 
 type RequestFormValues = z.infer<typeof requestFormSchema>;
 
+interface AvailableTable {
+  id: string;
+  name: string;
+  sectorId: string;
+  sectorName: string;
+}
+
 interface RequestFormDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,6 +100,8 @@ export function RequestFormDrawer({
   onSuccess,
 }: RequestFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [availableTables, setAvailableTables] = useState<AvailableTable[]>([]);
+  const [loadingTables, setLoadingTables] = useState(false);
   const isEdit = !!request;
 
   const form = useForm<RequestFormValues>({
@@ -116,10 +127,30 @@ export function RequestFormDrawer({
   });
 
   const selectedEventId = form.watch("eventId");
-  const selectedEvent = events.find((e) => e.id === selectedEventId);
 
-  const availableTables =
-    selectedEvent?.eventTables.filter((et) => !et.isBooked) ?? [];
+  useEffect(() => {
+    if (selectedEventId && !isEdit) {
+      loadAvailableTables(selectedEventId);
+    }
+  }, [selectedEventId, isEdit]);
+
+  async function loadAvailableTables(eventId: string) {
+    setLoadingTables(true);
+    try {
+      const result = await getAvailableTablesForEvent(eventId);
+      if (result.success && result.data) {
+        setAvailableTables(result.data);
+      } else {
+        setAvailableTables([]);
+        toast.error("Error al cargar mesas disponibles");
+      }
+    } catch (error) {
+      setAvailableTables([]);
+      toast.error("Error al cargar mesas");
+    } finally {
+      setLoadingTables(false);
+    }
+  }
 
   useEffect(() => {
     if (request) {
@@ -253,7 +284,10 @@ export function RequestFormDrawer({
                     <FormItem>
                       <FormLabel>Evento</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("tableId", "");
+                        }}
                         defaultValue={field.value}
                       >
                         <FormControl>
@@ -277,7 +311,7 @@ export function RequestFormDrawer({
                   )}
                 />
 
-                {selectedEvent && (
+                {selectedEventId && (
                   <FormField
                     control={form.control}
                     name="tableId"
@@ -287,22 +321,31 @@ export function RequestFormDrawer({
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
+                          disabled={loadingTables}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Selecciona una mesa" />
+                              <SelectValue
+                                placeholder={
+                                  loadingTables
+                                    ? "Cargando mesas..."
+                                    : availableTables.length === 0
+                                    ? "No hay mesas disponibles"
+                                    : "Selecciona una mesa"
+                                }
+                              />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {availableTables.map((et) => (
-                              <SelectItem key={et.table.id} value={et.table.id}>
-                                {et.table.sector.name} - {et.table.name}
+                            {availableTables.map((table) => (
+                              <SelectItem key={table.id} value={table.id}>
+                                {table.sectorName} - {table.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Solo se muestran mesas disponibles
+                          Solo se muestran mesas sin solicitudes activas
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

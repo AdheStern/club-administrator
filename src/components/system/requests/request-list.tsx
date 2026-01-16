@@ -59,7 +59,11 @@ export function RequestList({
     userRole
   );
 
-  const filteredRequests = initialRequests.filter((request) => {
+  const visibleRequests = isManager
+    ? initialRequests
+    : initialRequests.filter((request) => request.createdById === userId);
+
+  const filteredRequests = visibleRequests.filter((request) => {
     const matchesSearch =
       request.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.client.identityCard
@@ -119,7 +123,14 @@ export function RequestList({
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle>Solicitudes</CardTitle>
+            <div>
+              <CardTitle>Solicitudes</CardTitle>
+              {!isManager && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Mostrando tus solicitudes
+                </p>
+              )}
+            </div>
             {canCreate && (
               <Button onClick={() => setIsFormOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
@@ -178,7 +189,9 @@ export function RequestList({
               <p className="text-muted-foreground">
                 {searchQuery || statusFilter !== "all" || eventFilter !== "all"
                   ? "No se encontraron solicitudes con los filtros aplicados"
-                  : "No hay solicitudes creadas"}
+                  : isManager
+                  ? "No hay solicitudes creadas"
+                  : "No has creado ninguna solicitud"}
               </p>
               {!searchQuery &&
                 statusFilter === "all" &&
@@ -190,7 +203,9 @@ export function RequestList({
                     onClick={() => setIsFormOpen(true)}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    Crear primera solicitud
+                    {isManager
+                      ? "Crear primera solicitud"
+                      : "Crear mi primera solicitud"}
                   </Button>
                 )}
             </div>

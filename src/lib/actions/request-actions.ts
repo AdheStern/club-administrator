@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { convertDecimalsToNumbers } from "./helpers/decimal-converter";
 import { GuestHelper } from "./helpers/guest-helper";
-import { QRGenerator } from "./helpers/qr-generator";
+import * as QRGenerator from "./helpers/qr-generator";
 import type {
   ActionResult,
   PaginatedResult,
@@ -832,6 +832,45 @@ class RequestRepository {
       totalPages: Math.ceil(total / pageSize),
     };
   }
+
+  async getAvailableTablesForEvent(eventId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      sectorId: string;
+      sectorName: string;
+    }>
+  > {
+    const eventTables = await db.eventTable.findMany({
+      where: { eventId },
+      include: {
+        table: {
+          include: {
+            sector: true,
+          },
+        },
+      },
+    });
+
+    const activeRequestTableIds = await db.request.findMany({
+      where: {
+        eventId,
+        status: { in: ["PENDING", "OBSERVED", "APPROVED"] },
+      },
+      select: { tableId: true },
+    });
+
+    const bookedTableIds = new Set(activeRequestTableIds.map((r) => r.tableId));
+
+    return eventTables
+      .filter((et) => !bookedTableIds.has(et.tableId))
+      .map((et) => ({
+        id: et.table.id,
+        name: et.table.name,
+        sectorId: et.table.sector.id,
+        sectorName: et.table.sector.name,
+      }));
+  }
 }
 
 class RequestService {
@@ -1136,9 +1175,6 @@ class RequestService {
     }
   }
 
-  // src/lib/actions/request-actions.ts
-  // Solo la parte con errores - líneas 1135-1212
-
   async downloadRequestQRs(
     requestId: string
   ): Promise<ActionResult<{ qrPDFContent: string; fileName: string }>> {
@@ -1179,7 +1215,6 @@ class RequestService {
         };
       }
 
-      // Obtener los QR entries desde la base de datos
       const qrEntries = await db.qREntry.findMany({
         where: { requestId },
         include: {
@@ -1222,6 +1257,32 @@ class RequestService {
       };
     }
   }
+
+  async getAvailableTablesForEvent(eventId: string): Promise<
+    ActionResult<
+      Array<{
+        id: string;
+        name: string;
+        sectorId: string;
+        sectorName: string;
+      }>
+    >
+  > {
+    try {
+      const tables = await this.repository.getAvailableTablesForEvent(eventId);
+
+      return {
+        success: true,
+        data: tables,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: "Error al obtener mesas disponibles",
+        code: "FETCH_ERROR",
+      };
+    }
+  }
 }
 
 const requestService = new RequestService();
@@ -1259,4 +1320,8 @@ export async function getRequests(
 
 export async function downloadRequestQRs(requestId: string) {
   return requestService.downloadRequestQRs(requestId);
+}
+
+export async function getAvailableTablesForEvent(eventId: string) {
+  return requestService.getAvailableTablesForEvent(eventId);
 }
