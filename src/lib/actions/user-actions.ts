@@ -3,7 +3,6 @@
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
-import { hash } from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import type {
@@ -20,22 +19,7 @@ import type {
  * Factory Pattern: Funciones de utilidad para crear usuarios
  */
 const UserFactory = {
-  async createUser(dto: CreateUserDTO): Promise<{
-    id: string;
-    name: string;
-    email: string;
-    emailVerified: boolean;
-    role: UserRole;
-    status: UserStatus;
-    departmentId: string | null;
-    managerId: string | null;
-    image: string | null;
-    password?: string;
-  }> {
-    const hashedPassword = dto.password
-      ? await hash(dto.password, 10)
-      : undefined;
-
+  prepareUserData(dto: CreateUserDTO) {
     return {
       id: crypto.randomUUID(),
       name: dto.name,
@@ -46,7 +30,6 @@ const UserFactory = {
       departmentId: dto.departmentId ?? null,
       managerId: dto.managerId ?? null,
       image: dto.image ?? null,
-      password: hashedPassword,
     };
   },
 };
@@ -146,37 +129,96 @@ class HierarchyValidationStrategy implements ValidationStrategy {
 }
 
 /**
+ * Adapter Pattern: Adaptador para integración con Better Auth
+ */
+class BetterAuthAdapter {
+  async createUserWithAuth(
+    name: string,
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; userId?: string; error?: string }> {
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const response = await fetch(`${baseUrl}/api/auth/sign-up/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.message || "Error al crear usuario en Better Auth",
+        };
+      }
+
+      const user = await db.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      return {
+        success: true,
+        userId: user?.id,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al comunicarse con Better Auth",
+      };
+    }
+  }
+}
+
+/**
  * Repository Pattern: Abstrae el acceso a datos
  */
 class UserRepository {
+  private authAdapter = new BetterAuthAdapter();
+
   async create(userData: CreateUserDTO) {
-    const user = await UserFactory.createUser(userData);
+    const preparedData = UserFactory.prepareUserData(userData);
+
+    if (userData.password) {
+      const authResult = await this.authAdapter.createUserWithAuth(
+        preparedData.name,
+        preparedData.email,
+        userData.password
+      );
+
+      if (!authResult.success) {
+        throw new Error(authResult.error);
+      }
+
+      return db.user.update({
+        where: { id: authResult.userId },
+        data: {
+          role: preparedData.role,
+          status: preparedData.status,
+          departmentId: preparedData.departmentId,
+          managerId: preparedData.managerId,
+          image: preparedData.image,
+          emailVerified: true,
+          updatedAt: new Date(),
+        },
+        include: {
+          department: { select: { id: true, name: true } },
+          manager: { select: { id: true, name: true } },
+          subordinates: { select: { id: true, name: true } },
+        },
+      });
+    }
 
     return db.user.create({
       data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        emailVerified: user.emailVerified,
-        role: user.role,
-        status: user.status,
-        departmentId: user.departmentId,
-        managerId: user.managerId,
-        image: user.image,
+        ...preparedData,
         createdAt: new Date(),
         updatedAt: new Date(),
-        accounts: user.password
-          ? {
-              create: {
-                id: crypto.randomUUID(),
-                accountId: user.id,
-                providerId: "credential",
-                password: user.password,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            }
-          : undefined,
       },
       include: {
         department: { select: { id: true, name: true } },
@@ -262,6 +304,10 @@ class UserRepository {
   }
 
   async delete(id: string) {
+    await db.account.deleteMany({
+      where: { userId: id },
+    });
+
     return db.user.delete({ where: { id } });
   }
 
@@ -339,6 +385,40 @@ class HierarchyValidationHandler extends ValidationHandler {
   }
 }
 
+class PasswordValidationHandler extends ValidationHandler {
+  protected async validate(data: CreateUserDTO): Promise<ActionResult<void>> {
+    if (!data.password) {
+      return {
+        success: false,
+        error: "La contraseña es requerida",
+        code: "REQUIRED_PASSWORD",
+      };
+    }
+
+    if (data.password.length < 8) {
+      return {
+        success: false,
+        error: "La contraseña debe tener al menos 8 caracteres",
+        code: "PASSWORD_TOO_SHORT",
+      };
+    }
+
+    const hasUpperCase = /[A-Z]/.test(data.password);
+    const hasLowerCase = /[a-z]/.test(data.password);
+    const hasNumber = /[0-9]/.test(data.password);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      return {
+        success: false,
+        error: "La contraseña debe contener mayúsculas, minúsculas y números",
+        code: "PASSWORD_WEAK",
+      };
+    }
+
+    return { success: true };
+  }
+}
+
 /**
  * Facade Pattern: Interfaz simplificada para operaciones de usuario
  */
@@ -350,7 +430,9 @@ class UserService {
   ): Promise<ActionResult<UserWithRelations>> {
     try {
       const validationChain = new RequiredFieldsHandler();
-      validationChain.setNext(new EmailValidationHandler());
+      validationChain
+        .setNext(new EmailValidationHandler())
+        .setNext(new PasswordValidationHandler());
 
       const validationResult = await validationChain.handle(dto);
 

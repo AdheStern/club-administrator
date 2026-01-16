@@ -249,10 +249,7 @@ export function UserFormDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Rol</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un rol" />
@@ -276,10 +273,7 @@ export function UserFormDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Estado</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un estado" />
@@ -306,7 +300,7 @@ export function UserFormDrawer({
                     onValueChange={(value) => {
                       field.onChange(value === "none" ? "" : value);
                     }}
-                    defaultValue={field.value || "none"}
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -337,7 +331,7 @@ export function UserFormDrawer({
                     onValueChange={(value) => {
                       field.onChange(value === "none" ? "" : value);
                     }}
-                    defaultValue={field.value || "none"}
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>

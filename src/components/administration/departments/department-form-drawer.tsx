@@ -144,7 +144,7 @@ export function DepartmentFormDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-4">
         <SheetHeader>
           <SheetTitle>
             {isEdit ? "Editar departamento" : "Crear nuevo departamento"}
@@ -202,8 +202,10 @@ export function DepartmentFormDrawer({
                 <FormItem>
                   <FormLabel>Departamento padre</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value === "none" ? "" : value);
+                    }}
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -211,7 +213,9 @@ export function DepartmentFormDrawer({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Sin departamento padre</SelectItem>
+                      <SelectItem value="none">
+                        Sin departamento padre
+                      </SelectItem>
                       {availableParents.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}

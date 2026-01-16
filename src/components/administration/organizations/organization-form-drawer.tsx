@@ -149,7 +149,7 @@ export function OrganizationFormDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-4">
         <SheetHeader>
           <SheetTitle>
             {isEdit ? "Editar organización" : "Crear nueva organización"}

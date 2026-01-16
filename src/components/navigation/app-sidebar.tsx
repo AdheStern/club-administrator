@@ -3,11 +3,11 @@
 import {
   AppWindowIcon,
   CommandIcon,
+  type LucideIcon,
   SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import type * as React from "react";
-
 import { NavMain } from "@/components/navigation/nav-main";
 import { NavUser } from "@/components/navigation/nav-user";
 import {
@@ -20,52 +20,81 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const data = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Sectores",
-      url: "/sectors",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Mesas",
-      url: "/tables",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Paquetes",
-      url: "/packages",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Eventos",
-      url: "/events",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Reservas",
-      url: "/requests",
-      icon: AppWindowIcon,
-    },
-    {
-      title: "Administración",
-      url: "/administration",
-      icon: UsersIcon,
-    },
-    {
-      title: "Configuraciones",
-      url: "/settings",
-      icon: SettingsIcon,
-    },
-  ],
-};
+interface NavItem {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  requiredRoles?: string[];
+}
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+const navItems: NavItem[] = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Sectores",
+    url: "/sectors",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Mesas",
+    url: "/tables",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Paquetes",
+    url: "/packages",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Eventos",
+    url: "/events",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Reservas",
+    url: "/requests",
+    icon: AppWindowIcon,
+  },
+  {
+    title: "Administración",
+    url: "/administration",
+    icon: UsersIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN"],
+  },
+  {
+    title: "Configuraciones",
+    url: "/settings",
+    icon: SettingsIcon,
+  },
+];
+
+interface RoleAccessStrategy {
+  canAccess(userRole: string, requiredRoles?: string[]): boolean;
+}
+
+class DefaultAccessStrategy implements RoleAccessStrategy {
+  canAccess(userRole: string, requiredRoles?: string[]): boolean {
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
+    return requiredRoles.includes(userRole);
+  }
+}
+
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  userRole?: string;
+}
+
+export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
+  const accessStrategy = new DefaultAccessStrategy();
+
+  const filteredNavItems = navItems.filter((item) =>
+    accessStrategy.canAccess(userRole, item.requiredRoles)
+  );
+
   return (
     <Sidebar
       collapsible="icon"
@@ -90,7 +119,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={filteredNavItems} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />
