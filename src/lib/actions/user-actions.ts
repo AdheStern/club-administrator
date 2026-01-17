@@ -1,11 +1,8 @@
-// /src/lib/actions/user-actions.ts
-
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
-import { randomBytes, scrypt } from "crypto";
 import { revalidatePath } from "next/cache";
-import { promisify } from "util";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type {
   ActionResult,
@@ -17,15 +14,9 @@ import type {
   UserWithRelations,
 } from "./types/action-types";
 
-const scryptAsync = promisify(scrypt);
-
 const UserFactory = {
   prepareUserData(dto: CreateUserDTO) {
     return {
-      id: crypto.randomUUID(),
-      name: dto.name,
-      email: dto.email.toLowerCase(),
-      emailVerified: false,
       role: dto.role ?? UserRole.USER,
       status: dto.status ?? UserStatus.ACTIVE,
       departmentId: dto.departmentId ?? null,
@@ -119,69 +110,44 @@ class HierarchyValidationStrategy implements ValidationStrategy {
         select: { managerId: true },
       });
 
-      currentManagerId = manager?.managerId ?? null;
+      if (!manager) break;
+
+      currentManagerId = manager.managerId;
     }
 
     return false;
   }
 }
 
-class AuthCredentialManager {
-  async createPasswordHash(password: string): Promise<string> {
-    const salt = randomBytes(16).toString("hex");
-    const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-    return `${salt}:${derivedKey.toString("hex")}`;
-  }
-
-  async createAuthAccount(userId: string, hashedPassword: string) {
-    return await db.account.create({
-      data: {
-        id: crypto.randomUUID(),
-        accountId: userId,
-        providerId: "credential",
-        userId,
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-  }
-}
-
 class UserRepository {
-  private authManager = new AuthCredentialManager();
-
   async create(userData: CreateUserDTO) {
     const preparedData = UserFactory.prepareUserData(userData);
 
-    if (userData.password) {
-      const hashedPassword = await this.authManager.createPasswordHash(
-        userData.password,
-      );
-
-      const user = await db.user.create({
-        data: {
-          ...preparedData,
-          emailVerified: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        include: {
-          department: { select: { id: true, name: true } },
-          manager: { select: { id: true, name: true } },
-          subordinates: { select: { id: true, name: true } },
-        },
-      });
-
-      await this.authManager.createAuthAccount(user.id, hashedPassword);
-
-      return user;
+    if (!userData.password) {
+      throw new Error("La contraseña es requerida");
     }
 
-    return db.user.create({
+    const result = await auth.api.signUpEmail({
+      body: {
+        email: userData.email.toLowerCase(),
+        password: userData.password,
+        name: userData.name,
+      },
+    });
+
+    if (!result || !result.user) {
+      throw new Error("Error al crear usuario con Better Auth");
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: result.user.id },
       data: {
-        ...preparedData,
-        createdAt: new Date(),
+        role: preparedData.role,
+        status: preparedData.status,
+        departmentId: preparedData.departmentId,
+        managerId: preparedData.managerId,
+        image: preparedData.image,
+        emailVerified: true,
         updatedAt: new Date(),
       },
       include: {
@@ -190,6 +156,8 @@ class UserRepository {
         subordinates: { select: { id: true, name: true } },
       },
     });
+
+    return updatedUser;
   }
 
   async update(id: string, data: Partial<UpdateUserDTO>) {
@@ -395,7 +363,7 @@ class UserService {
       const validationResult = await validationChain.handle(dto);
 
       if (!validationResult.success) {
-        return validationResult;
+        return validationResult as ActionResult<UserWithRelations>;
       }
 
       const user = await this.repository.create(dto);
@@ -424,7 +392,7 @@ class UserService {
       const validationResult = await validationChain.handle(dto);
 
       if (!validationResult.success) {
-        return validationResult;
+        return validationResult as ActionResult<UserWithRelations>;
       }
 
       const user = await this.repository.update(dto.id, dto);
