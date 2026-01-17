@@ -1,3 +1,5 @@
+// src/components/system/requests/request-container.tsx
+
 "use client";
 
 import { CheckCircle, Clock, FileText, XCircle } from "lucide-react";
@@ -44,39 +46,37 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
   const [events, setEvents] = useState<EventWithRelations[]>([]);
   const [packages, setPackages] = useState<PackageWithRelations[]>([]);
 
-  // CORRECCIÓN: Usar useCallback para estabilizar la función y evitar warnings del linter
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [requestsResult, eventsResult, packagesResult] = await Promise.all([
-        getRequests(),
-        getEvents(),
-        getPackages(),
+        getRequests({}, { pageSize: 1000 }),
+        getEvents({}, { pageSize: 1000 }),
+        getPackages({}, { pageSize: 1000 }),
       ]);
 
       setRequests(
         requestsResult.success && requestsResult.data?.data
           ? requestsResult.data.data
-          : []
+          : [],
       );
       setEvents(
         eventsResult.success && eventsResult.data?.data
           ? eventsResult.data.data
-          : []
+          : [],
       );
       setPackages(
         packagesResult.success && packagesResult.data?.data
           ? packagesResult.data.data
-          : []
+          : [],
       );
     } catch (error) {
       console.error("Error loading requests:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Dependencias vacías porque getRequests, etc. son importaciones estáticas
+  }, []);
 
-  // CORRECCIÓN: Agregar loadData al array de dependencias
   useEffect(() => {
     loadData();
   }, [loadData]);

@@ -3,7 +3,7 @@
 "use client";
 
 import { DollarSign, Package, TrendingUp, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPackages } from "@/lib/actions/package-actions";
@@ -35,22 +35,21 @@ export function PackageContainer() {
   const [isLoading, setIsLoading] = useState(true);
   const [packages, setPackages] = useState<PackageWithRelations[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await getPackages();
-
+      const result = await getPackages({}, { pageSize: 1000 });
       setPackages(result.success && result.data?.data ? result.data.data : []);
     } catch (error) {
       console.error("Error loading packages:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const stats = {
     total: packages.length,
