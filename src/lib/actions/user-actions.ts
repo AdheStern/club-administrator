@@ -1,8 +1,11 @@
+// /src/lib/actions/user-actions.ts
+
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
-import { hash } from "bcrypt";
+import { randomBytes, scrypt } from "crypto";
 import { revalidatePath } from "next/cache";
+import { promisify } from "util";
 import { db } from "@/lib/db";
 import type {
   ActionResult,
@@ -13,6 +16,8 @@ import type {
   UserFilters,
   UserWithRelations,
 } from "./types/action-types";
+
+const scryptAsync = promisify(scrypt);
 
 const UserFactory = {
   prepareUserData(dto: CreateUserDTO) {
@@ -81,7 +86,7 @@ class HierarchyValidationStrategy implements ValidationStrategy {
 
     const hasCircularReference = await this.checkCircularReference(
       data.userId,
-      data.managerId
+      data.managerId,
     );
 
     if (hasCircularReference) {
@@ -97,7 +102,7 @@ class HierarchyValidationStrategy implements ValidationStrategy {
 
   private async checkCircularReference(
     userId: string,
-    managerId: string
+    managerId: string,
   ): Promise<boolean> {
     let currentManagerId: string | null = managerId;
     const visitedIds = new Set<string>([userId]);
@@ -123,14 +128,16 @@ class HierarchyValidationStrategy implements ValidationStrategy {
 
 class AuthCredentialManager {
   async createPasswordHash(password: string): Promise<string> {
-    return await hash(password, 10);
+    const salt = randomBytes(16).toString("hex");
+    const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+    return `${salt}:${derivedKey.toString("hex")}`;
   }
 
   async createAuthAccount(userId: string, hashedPassword: string) {
     return await db.account.create({
       data: {
         id: crypto.randomUUID(),
-        accountId: crypto.randomUUID(),
+        accountId: userId,
         providerId: "credential",
         userId,
         password: hashedPassword,
@@ -149,7 +156,7 @@ class UserRepository {
 
     if (userData.password) {
       const hashedPassword = await this.authManager.createPasswordHash(
-        userData.password
+        userData.password,
       );
 
       const user = await db.user.create({
@@ -213,7 +220,7 @@ class UserRepository {
 
   async findMany(
     filters: UserFilters,
-    pagination: PaginationParams
+    pagination: PaginationParams,
   ): Promise<PaginatedResult<UserWithRelations>> {
     const {
       page = 1,
@@ -377,7 +384,7 @@ class UserService {
   private repository = new UserRepository();
 
   async createUser(
-    dto: CreateUserDTO
+    dto: CreateUserDTO,
   ): Promise<ActionResult<UserWithRelations>> {
     try {
       const validationChain = new RequiredFieldsHandler();
@@ -410,7 +417,7 @@ class UserService {
   }
 
   async updateUser(
-    dto: UpdateUserDTO
+    dto: UpdateUserDTO,
   ): Promise<ActionResult<UserWithRelations>> {
     try {
       const validationChain = new HierarchyValidationHandler();
@@ -468,7 +475,7 @@ class UserService {
 
   async getUsers(
     filters: UserFilters = {},
-    pagination: PaginationParams = {}
+    pagination: PaginationParams = {},
   ): Promise<ActionResult<PaginatedResult<UserWithRelations>>> {
     try {
       const result = await this.repository.findMany(filters, pagination);
@@ -524,7 +531,7 @@ class UserService {
 
   async updateUserStatus(
     id: string,
-    status: UserStatus
+    status: UserStatus,
   ): Promise<ActionResult> {
     try {
       await this.repository.updateStatus(id, status);
@@ -559,7 +566,7 @@ export async function getUserById(id: string) {
 
 export async function getUsers(
   filters?: UserFilters,
-  pagination?: PaginationParams
+  pagination?: PaginationParams,
 ) {
   return userService.getUsers(filters, pagination);
 }
