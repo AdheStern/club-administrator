@@ -2,7 +2,8 @@
 
 "use client";
 
-import { SidebarIcon } from "lucide-react";
+import { CameraIcon, SidebarIcon } from "lucide-react";
+import Link from "next/link";
 import { DynamicBreadcrumbs } from "@/components/navigation/dynamic-breadcrumbs";
 import { SearchForm } from "@/components/navigation/search-form";
 import { ModeToggle } from "@/components/theme/mode-toggle";
@@ -27,6 +28,9 @@ export function SiteHeader() {
         <Separator orientation="vertical" className="mr-2 h-4" />
         <DynamicBreadcrumbs />
         <SearchForm className="w-full sm:ml-auto sm:w-auto" />
+        <Link href="qr-validator" className="ml-4">
+          <CameraIcon className="h-6 w-6 text-muted-foreground" />
+        </Link>
         <ModeToggle />
       </div>
     </header>
