@@ -47,19 +47,19 @@ export function TableContainer() {
     setIsLoading(true);
     try {
       const [tablesResult, sectorsResult] = await Promise.all([
-        getTables(),
-        getSectors(),
+        getTables({}, { pageSize: 1000 }),
+        getSectors({}, { pageSize: 1000 }),
       ]);
 
       setTables(
         tablesResult.success && tablesResult.data?.data
           ? tablesResult.data.data
-          : []
+          : [],
       );
       setSectors(
         sectorsResult.success && sectorsResult.data?.data
           ? sectorsResult.data.data
-          : []
+          : [],
       );
     } catch (error) {
       console.error("Error loading tables:", error);
