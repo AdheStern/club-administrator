@@ -45,25 +45,25 @@ export function EventContainer() {
     setIsLoading(true);
     try {
       const [eventsResult, sectorsResult, tablesResult] = await Promise.all([
-        getEvents(),
-        getSectors(),
-        getTables(),
+        getEvents({}, { pageSize: 1000 }),
+        getSectors({}, { pageSize: 1000 }),
+        getTables({}, { pageSize: 1000 }),
       ]);
 
       setEvents(
         eventsResult.success && eventsResult.data?.data
           ? eventsResult.data.data
-          : []
+          : [],
       );
       setSectors(
         sectorsResult.success && sectorsResult.data?.data
           ? sectorsResult.data.data
-          : []
+          : [],
       );
       setTables(
         tablesResult.success && tablesResult.data?.data
           ? tablesResult.data.data
-          : []
+          : [],
       );
     } catch (error) {
       console.error("Error loading events:", error);
