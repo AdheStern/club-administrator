@@ -59,7 +59,14 @@ const userFormSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
   email: z.string().email("Email inválido"),
   password: z.string().optional(),
-  role: z.enum(["SUPER_ADMIN", "ADMIN", "MANAGER", "USER"]),
+  role: z.enum([
+    "SUPER_ADMIN",
+    "ADMIN",
+    "MANAGER",
+    "SUPERVISOR",
+    "VALIDATOR",
+    "USER",
+  ]),
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]),
   departmentId: z.string().optional(),
   managerId: z.string().optional(),
@@ -163,7 +170,7 @@ export function UserFormDrawer({
     setSelectedSectors((prev) =>
       prev.includes(sectorId)
         ? prev.filter((id) => id !== sectorId)
-        : [...prev, sectorId]
+        : [...prev, sectorId],
     );
   };
 
@@ -323,6 +330,8 @@ export function UserFormDrawer({
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="USER">Usuario</SelectItem>
+                      <SelectItem value="VALIDATOR">Validador</SelectItem>
+                      <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
                       <SelectItem value="MANAGER">Manager</SelectItem>
                       <SelectItem value="ADMIN">Admin</SelectItem>
                       <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
@@ -468,7 +477,7 @@ export function UserFormDrawer({
                         type="button"
                         onClick={() =>
                           removeSector(
-                            sectors.find((s) => s.name === name)?.id || ""
+                            sectors.find((s) => s.name === name)?.id || "",
                           )
                         }
                         className="ml-1 hover:bg-secondary-foreground/20 rounded-full"

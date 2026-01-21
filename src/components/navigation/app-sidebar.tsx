@@ -4,7 +4,6 @@ import {
   AppWindowIcon,
   CommandIcon,
   type LucideIcon,
-  SettingsIcon,
   UsersIcon,
 } from "lucide-react";
 import type * as React from "react";
@@ -32,42 +31,43 @@ const navItems: NavItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR"],
   },
   {
     title: "Sectores",
     url: "/sectors",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Mesas",
     url: "/tables",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Paquetes",
     url: "/packages",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Eventos",
     url: "/events",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR"],
   },
   {
     title: "Reservas",
     url: "/requests",
     icon: AppWindowIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
   },
   {
     title: "Administración",
     url: "/administration",
     icon: UsersIcon,
-    requiredRoles: ["SUPER_ADMIN", "ADMIN"],
-  },
-  {
-    title: "Configuraciones",
-    url: "/settings",
-    icon: SettingsIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
 ];
 
@@ -90,9 +90,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
   const accessStrategy = new DefaultAccessStrategy();
-
   const filteredNavItems = navItems.filter((item) =>
-    accessStrategy.canAccess(userRole, item.requiredRoles)
+    accessStrategy.canAccess(userRole, item.requiredRoles),
   );
 
   return (
