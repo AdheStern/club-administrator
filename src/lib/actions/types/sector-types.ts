@@ -6,6 +6,7 @@ export interface CreateSectorDTO {
   name: string;
   description?: string;
   capacity: number;
+  requiresGuestList?: boolean;
 }
 
 export interface UpdateSectorDTO {
@@ -13,12 +14,14 @@ export interface UpdateSectorDTO {
   name?: string;
   description?: string;
   capacity?: number;
+  requiresGuestList?: boolean;
   isActive?: boolean;
 }
 
 export interface SectorFilters {
   search?: string;
   isActive?: boolean;
+  requiresGuestList?: boolean;
 }
 
 export type SectorWithRelations = Sector & {

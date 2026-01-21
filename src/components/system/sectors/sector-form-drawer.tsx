@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
   FormControl,
@@ -44,6 +45,7 @@ const sectorFormSchema = z.object({
     .number()
     .min(1, "La capacidad debe ser mayor a 0")
     .max(10000, "La capacidad no puede exceder 10000"),
+  requiresGuestList: z.boolean(),
 });
 
 type SectorFormValues = z.infer<typeof sectorFormSchema>;
@@ -70,6 +72,7 @@ export function SectorFormDrawer({
       name: "",
       description: "",
       capacity: 50,
+      requiresGuestList: false,
     },
   });
 
@@ -79,12 +82,14 @@ export function SectorFormDrawer({
         name: sector.name,
         description: sector.description ?? "",
         capacity: sector.capacity,
+        requiresGuestList: sector.requiresGuestList,
       });
     } else {
       form.reset({
         name: "",
         description: "",
         capacity: 50,
+        requiresGuestList: false,
       });
     }
   }, [sector, form]);
@@ -99,6 +104,7 @@ export function SectorFormDrawer({
           name: values.name,
           description: values.description,
           capacity: values.capacity,
+          requiresGuestList: values.requiresGuestList,
         };
 
         const result = await updateSector(dto);
@@ -115,6 +121,7 @@ export function SectorFormDrawer({
           name: values.name,
           description: values.description,
           capacity: values.capacity,
+          requiresGuestList: values.requiresGuestList,
         };
 
         const result = await createSector(dto);
@@ -127,7 +134,7 @@ export function SectorFormDrawer({
           toast.error(result.error || "Error al crear sector");
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
     } finally {
       setIsLoading(false);
@@ -209,6 +216,28 @@ export function SectorFormDrawer({
                     Número máximo de personas en el sector
                   </FormDescription>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="requiresGuestList"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Requiere lista de invitados</FormLabel>
+                    <FormDescription>
+                      Activa esta opción si las reservas en este sector
+                      requieren una lista de invitados
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />

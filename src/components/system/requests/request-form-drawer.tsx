@@ -33,6 +33,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { searchGuests } from "@/lib/actions/guest-actions";
 import {
   createRequest,
   getAvailableTablesForEvent,
@@ -45,12 +46,14 @@ import type {
   RequestWithRelations,
   UpdateRequestDTO,
 } from "@/lib/actions/types/request-types";
+import { GuestAutocomplete } from "./guest-autocomplete";
 
 const guestSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
   identityCard: z.string().min(5, "El CI debe tener al menos 5 caracteres"),
   phone: z.string().optional(),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
+  instagramHandle: z.string().optional(),
 });
 
 const requestFormSchema = z.object({
@@ -63,9 +66,10 @@ const requestFormSchema = z.object({
     .min(5, "El CI debe tener al menos 5 caracteres"),
   clientPhone: z.string().min(7, "El teléfono debe tener al menos 7 dígitos"),
   clientEmail: z.string().email("Email inválido").optional().or(z.literal("")),
+  clientInstagramHandle: z.string().optional(),
   hasConsumption: z.boolean().default(false),
   extraGuests: z.number().min(0, "No puede ser negativo").default(0),
-  guestList: z.array(guestSchema).min(1, "Debe agregar al menos un invitado"),
+  guestList: z.array(guestSchema).optional(),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: "Debe aceptar los términos y condiciones",
   }),
@@ -78,6 +82,7 @@ interface AvailableTable {
   name: string;
   sectorId: string;
   sectorName: string;
+  requiresGuestList: boolean;
 }
 
 interface RequestFormDrawerProps {
@@ -102,6 +107,9 @@ export function RequestFormDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [availableTables, setAvailableTables] = useState<AvailableTable[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [selectedTable, setSelectedTable] = useState<AvailableTable | null>(
+    null,
+  );
   const isEdit = !!request;
 
   const form = useForm<RequestFormValues>({
@@ -114,9 +122,10 @@ export function RequestFormDrawer({
       clientIdentityCard: "",
       clientPhone: "",
       clientEmail: "",
+      clientInstagramHandle: "",
       hasConsumption: false,
       extraGuests: 0,
-      guestList: [{ name: "", identityCard: "", phone: "", email: "" }],
+      guestList: [],
       termsAccepted: false,
     },
   });
@@ -127,12 +136,20 @@ export function RequestFormDrawer({
   });
 
   const selectedEventId = form.watch("eventId");
+  const selectedTableId = form.watch("tableId");
 
   useEffect(() => {
     if (selectedEventId && !isEdit) {
       loadAvailableTables(selectedEventId);
     }
   }, [selectedEventId, isEdit]);
+
+  useEffect(() => {
+    if (selectedTableId && availableTables.length > 0) {
+      const table = availableTables.find((t) => t.id === selectedTableId);
+      setSelectedTable(table || null);
+    }
+  }, [selectedTableId, availableTables]);
 
   async function loadAvailableTables(eventId: string) {
     setLoadingTables(true);
@@ -162,13 +179,15 @@ export function RequestFormDrawer({
         clientIdentityCard: request.client.identityCard,
         clientPhone: request.client.phone ?? "",
         clientEmail: request.client.email ?? "",
+        clientInstagramHandle: request.client.instagramHandle ?? "",
         hasConsumption: request.hasConsumption,
         extraGuests: request.extraGuests,
         guestList: request.guestInvitations.map((gi) => ({
           name: gi.guest.name,
           identityCard: gi.guest.identityCard,
-          phone: "",
-          email: "",
+          phone: gi.guest.phone ?? "",
+          email: gi.guest.email ?? "",
+          instagramHandle: gi.guest.instagramHandle ?? "",
         })),
         termsAccepted: true,
       });
@@ -181,9 +200,10 @@ export function RequestFormDrawer({
         clientIdentityCard: "",
         clientPhone: "",
         clientEmail: "",
+        clientInstagramHandle: "",
         hasConsumption: false,
         extraGuests: 0,
-        guestList: [{ name: "", identityCard: "", phone: "", email: "" }],
+        guestList: [],
         termsAccepted: false,
       });
     }
@@ -201,8 +221,9 @@ export function RequestFormDrawer({
             identityCard: values.clientIdentityCard,
             phone: values.clientPhone,
             email: values.clientEmail,
+            instagramHandle: values.clientInstagramHandle,
           },
-          guestList: values.guestList,
+          guestList: values.guestList || [],
           hasConsumption: values.hasConsumption,
           extraGuests: values.extraGuests,
         };
@@ -226,8 +247,9 @@ export function RequestFormDrawer({
             identityCard: values.clientIdentityCard,
             phone: values.clientPhone,
             email: values.clientEmail,
+            instagramHandle: values.clientInstagramHandle,
           },
-          guestList: values.guestList,
+          guestList: values.guestList || [],
           hasConsumption: values.hasConsumption,
           extraGuests: values.extraGuests,
           termsAccepted: values.termsAccepted,
@@ -252,9 +274,11 @@ export function RequestFormDrawer({
   }
 
   const activeEvents = events.filter(
-    (e) => e.isActive && new Date(e.eventDate) > new Date()
+    (e) => e.isActive && new Date(e.eventDate) > new Date(),
   );
   const activePackages = packages.filter((p) => p.isActive);
+
+  const requiresGuestList = selectedTable?.requiresGuestList ?? false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -287,6 +311,7 @@ export function RequestFormDrawer({
                         onValueChange={(value) => {
                           field.onChange(value);
                           form.setValue("tableId", "");
+                          setSelectedTable(null);
                         }}
                         defaultValue={field.value}
                       >
@@ -300,7 +325,7 @@ export function RequestFormDrawer({
                             <SelectItem key={event.id} value={event.id}>
                               {event.name} -{" "}
                               {new Date(event.eventDate).toLocaleDateString(
-                                "es-BO"
+                                "es-BO",
                               )}
                             </SelectItem>
                           ))}
@@ -330,8 +355,8 @@ export function RequestFormDrawer({
                                   loadingTables
                                     ? "Cargando mesas..."
                                     : availableTables.length === 0
-                                    ? "No hay mesas disponibles"
-                                    : "Selecciona una mesa"
+                                      ? "No hay mesas disponibles"
+                                      : "Selecciona una mesa"
                                 }
                               />
                             </SelectTrigger>
@@ -340,6 +365,7 @@ export function RequestFormDrawer({
                             {availableTables.map((table) => (
                               <SelectItem key={table.id} value={table.id}>
                                 {table.sectorName} - {table.name}
+                                {table.requiresGuestList && " (Requiere lista)"}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -395,9 +421,24 @@ export function RequestFormDrawer({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Nombre completo</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Juan Pérez" {...field} />
-                      </FormControl>
+                      <GuestAutocomplete
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onGuestSelect={(guest) => {
+                          form.setValue("clientName", guest.name);
+                          form.setValue(
+                            "clientIdentityCard",
+                            guest.identityCard,
+                          );
+                          form.setValue("clientPhone", guest.phone ?? "");
+                          form.setValue("clientEmail", guest.email ?? "");
+                          form.setValue(
+                            "clientInstagramHandle",
+                            guest.instagramHandle ?? "",
+                          );
+                        }}
+                        placeholder="Juan Pérez"
+                      />
                       <FormMessage />
                     </FormItem>
                   )}
@@ -451,75 +492,196 @@ export function RequestFormDrawer({
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="clientInstagramHandle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Instagram (opcional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="@juanperez" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <Separator />
+            {requiresGuestList && (
+              <>
+                <Separator />
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Lista de Invitados</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    append({ name: "", identityCard: "", phone: "", email: "" })
-                  }
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Agregar
-                </Button>
-              </div>
-
-              {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="border rounded-lg p-4 space-y-4 relative"
-                >
-                  {fields.length > 1 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">Lista de Invitados</h3>
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 h-8 w-8"
-                      onClick={() => remove(index)}
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        append({
+                          name: "",
+                          identityCard: "",
+                          phone: "",
+                          email: "",
+                          instagramHandle: "",
+                        })
+                      }
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Plus className="h-4 w-4 mr-2" />
+                      Agregar
                     </Button>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name={`guestList.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre completo</FormLabel>
-                          <FormControl>
-                            <Input placeholder="María López" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name={`guestList.${index}.identityCard`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Carnet de Identidad</FormLabel>
-                          <FormControl>
-                            <Input placeholder="7654321" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
+
+                  {fields.length === 0 ? (
+                    <div className="text-center py-8 border-2 border-dashed rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        No hay invitados agregados
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          append({
+                            name: "",
+                            identityCard: "",
+                            phone: "",
+                            email: "",
+                            instagramHandle: "",
+                          })
+                        }
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Agregar primer invitado
+                      </Button>
+                    </div>
+                  ) : (
+                    fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="border rounded-lg p-4 space-y-4 relative"
+                      >
+                        {fields.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-2 right-2 h-8 w-8"
+                            onClick={() => remove(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name={`guestList.${index}.name`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Nombre completo</FormLabel>
+                                <GuestAutocomplete
+                                  value={field.value}
+                                  onValueChange={field.onChange}
+                                  onGuestSelect={(guest) => {
+                                    form.setValue(
+                                      `guestList.${index}.name`,
+                                      guest.name,
+                                    );
+                                    form.setValue(
+                                      `guestList.${index}.identityCard`,
+                                      guest.identityCard,
+                                    );
+                                    form.setValue(
+                                      `guestList.${index}.phone`,
+                                      guest.phone ?? "",
+                                    );
+                                    form.setValue(
+                                      `guestList.${index}.email`,
+                                      guest.email ?? "",
+                                    );
+                                    form.setValue(
+                                      `guestList.${index}.instagramHandle`,
+                                      guest.instagramHandle ?? "",
+                                    );
+                                  }}
+                                  placeholder="María López"
+                                />
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`guestList.${index}.identityCard`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Carnet de Identidad</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="7654321" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name={`guestList.${index}.phone`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Teléfono (opcional)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="71234567" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`guestList.${index}.email`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email (opcional)</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="email"
+                                    placeholder="maria@ejemplo.com"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <FormField
+                          control={form.control}
+                          name={`guestList.${index}.instagramHandle`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Instagram (opcional)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="@marialopez" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
 
             <Separator />
 

@@ -1,12 +1,11 @@
-// src/components/system/events/event-form-drawer.tsx
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarIcon, Loader2, Upload, X } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -36,15 +35,28 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { createEvent, updateEvent } from "@/lib/actions/event-actions";
+import {
+  createEvent,
+  updateEvent,
+  uploadEventImage,
+  uploadPaymentQR,
+} from "@/lib/actions/event-actions";
 import type {
   CreateEventDTO,
-  EventWithRelations,
+  EventWithRelationsDTO,
   UpdateEventDTO,
 } from "@/lib/actions/types/event-types";
 import type { SectorWithRelations } from "@/lib/actions/types/sector-types";
 import type { TableWithRelations } from "@/lib/actions/types/table-types";
 import { cn } from "@/lib/utils";
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
 
 const eventFormSchema = z.object({
   name: z
@@ -53,13 +65,20 @@ const eventFormSchema = z.object({
     .max(200, "El nombre no puede exceder 200 caracteres"),
   description: z.string().optional(),
   eventDate: z.date({
-    required_error: "La fecha del evento es requerida",
+    message: "La fecha del evento es requerida",
   }),
+  image: z.custom<File>().optional(),
+  paymentQR: z.custom<File>().optional(),
+  commissionAmount: z
+    .number()
+    .min(0, "La comisión no puede ser negativa")
+    .optional(),
+  freeInvitationQRCount: z.number().min(0, "Debe ser mayor o igual a 0"),
   visibilityStart: z.date({
-    required_error: "La fecha de inicio de visibilidad es requerida",
+    message: "La fecha de inicio de visibilidad es requerida",
   }),
   visibilityEnd: z.date({
-    required_error: "La fecha de fin de visibilidad es requerida",
+    message: "La fecha de fin de visibilidad es requerida",
   }),
   sectorIds: z.array(z.string()).min(1, "Debe seleccionar al menos un sector"),
   tableIds: z.array(z.string()).min(1, "Debe seleccionar al menos una mesa"),
@@ -70,7 +89,7 @@ type EventFormValues = z.infer<typeof eventFormSchema>;
 interface EventFormDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  event?: EventWithRelations | null;
+  event?: EventWithRelationsDTO | null;
   sectors: SectorWithRelations[];
   tables: TableWithRelations[];
   onSuccess: () => void;
@@ -85,6 +104,10 @@ export function EventFormDrawer({
   onSuccess,
 }: EventFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [paymentQRPreview, setPaymentQRPreview] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const paymentQRInputRef = useRef<HTMLInputElement>(null);
   const isEdit = !!event;
 
   const form = useForm<EventFormValues>({
@@ -93,6 +116,8 @@ export function EventFormDrawer({
       name: "",
       description: "",
       eventDate: new Date(),
+      commissionAmount: undefined,
+      freeInvitationQRCount: 0,
       visibilityStart: new Date(),
       visibilityEnd: new Date(),
       sectorIds: [],
@@ -103,7 +128,7 @@ export function EventFormDrawer({
   const selectedSectorIds = form.watch("sectorIds");
 
   const availableTables = tables.filter((table) =>
-    selectedSectorIds.includes(table.sectorId)
+    selectedSectorIds.includes(table.sectorId),
   );
 
   useEffect(() => {
@@ -112,47 +137,106 @@ export function EventFormDrawer({
         name: event.name,
         description: event.description ?? "",
         eventDate: new Date(event.eventDate),
+        commissionAmount: event.commissionAmount ?? undefined,
+        freeInvitationQRCount: event.freeInvitationQRCount,
         visibilityStart: new Date(event.visibilityStart),
         visibilityEnd: new Date(event.visibilityEnd),
         sectorIds: event.eventSectors.map((es) => es.sector.id),
         tableIds: event.eventTables.map((et) => et.table.id),
       });
+
+      if (event.image) {
+        setImagePreview(`/uploads/${event.image}`);
+      }
+      if (event.paymentQR) {
+        setPaymentQRPreview(`/uploads/${event.paymentQR}`);
+      }
     } else {
       form.reset({
         name: "",
         description: "",
         eventDate: new Date(),
+        commissionAmount: undefined,
+        freeInvitationQRCount: 0,
         visibilityStart: new Date(),
         visibilityEnd: new Date(),
         sectorIds: [],
         tableIds: [],
       });
+      setImagePreview(null);
+      setPaymentQRPreview(null);
     }
   }, [event, form]);
 
   useEffect(() => {
     const currentTableIds = form.getValues("tableIds");
     const validTableIds = currentTableIds.filter((tableId) =>
-      availableTables.some((t) => t.id === tableId)
+      availableTables.some((t) => t.id === tableId),
     );
 
     if (validTableIds.length !== currentTableIds.length) {
       form.setValue("tableIds", validTableIds);
     }
-  }, [selectedSectorIds, form, availableTables]);
+  }, [availableTables, form]);
+
+  const handleImageChange = (file: File | undefined) => {
+    if (!file) {
+      setImagePreview(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("La imagen no puede superar 5MB");
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Solo se aceptan imágenes JPG, PNG o WebP");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaymentQRChange = (file: File | undefined) => {
+    if (!file) {
+      setPaymentQRPreview(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("La imagen no puede superar 5MB");
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Solo se aceptan imágenes JPG, PNG o WebP");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPaymentQRPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSelectAllSectors = () => {
     const activeSectors = sectors.filter((s) => s.isActive);
     form.setValue(
       "sectorIds",
-      activeSectors.map((s) => s.id)
+      activeSectors.map((s) => s.id),
     );
   };
 
   const handleSelectAllTables = () => {
     form.setValue(
       "tableIds",
-      availableTables.map((t) => t.id)
+      availableTables.map((t) => t.id),
     );
   };
 
@@ -160,12 +244,37 @@ export function EventFormDrawer({
     setIsLoading(true);
 
     try {
+      let imagePath: string | undefined;
+      let paymentQRPath: string | undefined;
+
+      if (values.image) {
+        const imageResult = await uploadEventImage(values.image);
+        if (!imageResult.success) {
+          toast.error(imageResult.error || "Error al subir imagen");
+          return;
+        }
+        imagePath = imageResult.data;
+      }
+
+      if (values.paymentQR) {
+        const qrResult = await uploadPaymentQR(values.paymentQR);
+        if (!qrResult.success) {
+          toast.error(qrResult.error || "Error al subir QR");
+          return;
+        }
+        paymentQRPath = qrResult.data;
+      }
+
       if (isEdit && event) {
         const dto: UpdateEventDTO = {
           id: event.id,
           name: values.name,
           description: values.description,
           eventDate: values.eventDate,
+          image: imagePath,
+          paymentQR: paymentQRPath,
+          commissionAmount: values.commissionAmount,
+          freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
           visibilityEnd: values.visibilityEnd,
           sectorIds: values.sectorIds,
@@ -186,6 +295,10 @@ export function EventFormDrawer({
           name: values.name,
           description: values.description,
           eventDate: values.eventDate,
+          image: imagePath,
+          paymentQR: paymentQRPath,
+          commissionAmount: values.commissionAmount,
+          freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
           visibilityEnd: values.visibilityEnd,
           sectorIds: values.sectorIds,
@@ -202,7 +315,7 @@ export function EventFormDrawer({
           toast.error(result.error || "Error al crear evento");
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
     } finally {
       setIsLoading(false);
@@ -270,6 +383,179 @@ export function EventFormDrawer({
 
             <FormField
               control={form.control}
+              name="image"
+              render={({ field: { value, ...field } }) => (
+                <FormItem>
+                  <FormLabel>Imagen del evento</FormLabel>
+                  <FormControl>
+                    <div className="space-y-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={imageInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          field.onChange(file);
+                          handleImageChange(file);
+                        }}
+                      />
+                      {imagePreview ? (
+                        <div className="relative w-full aspect-9/16 rounded-lg overflow-hidden border">
+                          <Image
+                            src={imagePreview}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2"
+                            onClick={() => {
+                              field.onChange(undefined);
+                              setImagePreview(null);
+                              if (imageInputRef.current) {
+                                imageInputRef.current.value = "";
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => imageInputRef.current?.click()}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Subir imagen
+                        </Button>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Imagen promocional del evento (formato 9:16, máx. 5MB)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="paymentQR"
+              render={({ field: { value, ...field } }) => (
+                <FormItem>
+                  <FormLabel>QR de pago (opcional)</FormLabel>
+                  <FormControl>
+                    <div className="space-y-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={paymentQRInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          field.onChange(file);
+                          handlePaymentQRChange(file);
+                        }}
+                      />
+                      {paymentQRPreview ? (
+                        <div className="relative w-48 h-48 rounded-lg overflow-hidden border mx-auto">
+                          <Image
+                            src={paymentQRPreview}
+                            alt="QR Preview"
+                            fill
+                            className="object-contain"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2"
+                            onClick={() => {
+                              field.onChange(undefined);
+                              setPaymentQRPreview(null);
+                              if (paymentQRInputRef.current) {
+                                paymentQRInputRef.current.value = "";
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => paymentQRInputRef.current?.click()}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Subir QR de pago
+                        </Button>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Código QR para pagos del evento (máx. 5MB)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="commissionAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Comisión (Bs.)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value ? Number(value) : undefined);
+                        }}
+                        value={field.value ?? ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="freeInvitationQRCount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>QR gratis por reserva</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        {...field}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
               name="eventDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
@@ -281,7 +567,7 @@ export function EventFormDrawer({
                           variant="outline"
                           className={cn(
                             "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
+                            !field.value && "text-muted-foreground",
                           )}
                         >
                           {field.value ? (
@@ -327,7 +613,7 @@ export function EventFormDrawer({
                             variant="outline"
                             className={cn(
                               "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
+                              !field.value && "text-muted-foreground",
                             )}
                           >
                             {field.value ? (
@@ -366,7 +652,7 @@ export function EventFormDrawer({
                             variant="outline"
                             className={cn(
                               "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
+                              !field.value && "text-muted-foreground",
                             )}
                           >
                             {field.value ? (
@@ -410,7 +696,7 @@ export function EventFormDrawer({
                       Seleccionar todos
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 border rounded-lg p-4 max-h-[200px] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-3 border rounded-lg p-4 max-h-50 overflow-y-auto">
                     {activeSectors.map((sector) => (
                       <FormField
                         key={sector.id}
@@ -433,8 +719,8 @@ export function EventFormDrawer({
                                         ])
                                       : field.onChange(
                                           field.value?.filter(
-                                            (value) => value !== sector.id
-                                          )
+                                            (value) => value !== sector.id,
+                                          ),
                                         );
                                   }}
                                 />
@@ -480,14 +766,14 @@ export function EventFormDrawer({
                       Selecciona sectores para ver las mesas disponibles
                     </div>
                   ) : (
-                    <div className="border rounded-lg p-4 max-h-[300px] overflow-y-auto">
+                    <div className="border rounded-lg p-4 max-h-75 overflow-y-auto">
                       {activeSectors
                         .filter((sector) =>
-                          selectedSectorIds.includes(sector.id)
+                          selectedSectorIds.includes(sector.id),
                         )
                         .map((sector) => {
                           const sectorTables = availableTables.filter(
-                            (t) => t.sectorId === sector.id
+                            (t) => t.sectorId === sector.id,
                           );
 
                           if (sectorTables.length === 0) return null;
@@ -512,7 +798,7 @@ export function EventFormDrawer({
                                           <FormControl>
                                             <Checkbox
                                               checked={field.value?.includes(
-                                                table.id
+                                                table.id,
                                               )}
                                               onCheckedChange={(checked) => {
                                                 return checked
@@ -523,8 +809,8 @@ export function EventFormDrawer({
                                                   : field.onChange(
                                                       field.value?.filter(
                                                         (value) =>
-                                                          value !== table.id
-                                                      )
+                                                          value !== table.id,
+                                                      ),
                                                     );
                                               }}
                                             />

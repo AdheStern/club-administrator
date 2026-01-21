@@ -1,3 +1,211 @@
+// // prisma/schema.prisma
+
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")
+// }
+
+// // ============================================
+// // MODELOS BASE BETTER AUTH
+// // ============================================
+
+// model User {
+//   id            String    @id
+//   name          String
+//   email         String
+//   emailVerified Boolean
+//   image         String?
+//   createdAt     DateTime
+//   updatedAt     DateTime
+
+//   banned        Boolean?  @default(false)
+//   banReason     String?
+//   banExpires    DateTime?
+  
+//   // Extensiones para administración
+//   role          String    @default("USER")
+//   status        String    @default("ACTIVE")
+//   departmentId  String?
+//   managerId     String?
+  
+//   // Relaciones Better Auth
+//   sessions      Session[]
+//   accounts      Account[]
+  
+//   // Relaciones organizacionales
+//   department    Department?        @relation("UserDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+//   manager       User?              @relation("ManagerSubordinates", fields: [managerId], references: [id], onDelete: SetNull)
+//   subordinates  User[]             @relation("ManagerSubordinates")
+  
+//   // Relaciones con organizaciones
+//   organizationMembers OrganizationMember[]
+//   organizationInvitations OrganizationInvitation[]
+
+//   @@unique([email])
+//   @@index([departmentId])
+//   @@index([managerId])
+//   @@index([role])
+//   @@index([status])
+//   @@map("user")
+// }
+
+// model Session {
+//   id        String   @id
+//   expiresAt DateTime
+//   token     String
+//   createdAt DateTime
+//   updatedAt DateTime
+//   ipAddress String?
+//   userAgent String?
+//   userId    String
+//   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@unique([token])
+//   @@map("session")
+// }
+
+// model Account {
+//   id                    String    @id
+//   accountId             String
+//   providerId            String
+//   userId                String
+//   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+//   accessToken           String?
+//   refreshToken          String?
+//   idToken               String?
+//   accessTokenExpiresAt  DateTime?
+//   refreshTokenExpiresAt DateTime?
+//   scope                 String?
+//   password              String?
+//   createdAt             DateTime
+//   updatedAt             DateTime
+
+//   @@map("account")
+// }
+
+// model Verification {
+//   id         String    @id
+//   identifier String
+//   value      String
+//   expiresAt  DateTime
+//   createdAt  DateTime?
+//   updatedAt  DateTime?
+
+//   @@map("verification")
+// }
+
+// // ============================================
+// // MODELOS DE ORGANIZACIÓN (Organization Plugin)
+// // ============================================
+
+// model Organization {
+//   id        String   @id
+//   name      String
+//   slug      String   @unique
+//   logo      String?
+//   metadata  Json?
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+
+//   members      OrganizationMember[]
+//   invitations  OrganizationInvitation[]
+
+//   @@map("organization")
+// }
+
+// model OrganizationMember {
+//   id             String       @id
+//   organizationId String
+//   userId         String
+//   role           String       @default("MEMBER")
+//   createdAt      DateTime     @default(now())
+//   updatedAt      DateTime     @updatedAt
+
+//   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+//   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@unique([organizationId, userId])
+//   @@index([userId])
+//   @@index([organizationId])
+//   @@map("organization_member")
+// }
+
+// model OrganizationInvitation {
+//   id             String   @id
+//   organizationId String
+//   email          String
+//   role           String   @default("MEMBER")
+//   status         String   @default("PENDING")
+//   inviterId      String
+//   expiresAt      DateTime
+//   createdAt      DateTime @default(now())
+//   updatedAt      DateTime @updatedAt
+
+//   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+//   inviter        User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+//   @@unique([organizationId, email])
+//   @@index([email])
+//   @@index([status])
+//   @@map("organization_invitation")
+// }
+
+// // ============================================
+// // MODELOS PERSONALIZADOS
+// // ============================================
+
+// model Department {
+//   id          String   @id @default(cuid())
+//   name        String
+//   description String?
+//   parentId    String?
+//   createdAt   DateTime @default(now())
+//   updatedAt   DateTime @updatedAt
+
+//   parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+//   children    Department[] @relation("DepartmentHierarchy")
+//   users       User[]       @relation("UserDepartment")
+
+//   @@index([parentId])
+//   @@map("department")
+// }
+
+// // ============================================
+// // ENUMS (Solo para referencia en TypeScript)
+// // ============================================
+
+// enum UserRole {
+//   SUPER_ADMIN
+//   ADMIN
+//   MANAGER
+//   USER
+// }
+
+// enum UserStatus {
+//   ACTIVE
+//   INACTIVE
+//   SUSPENDED
+// }
+
+// enum OrgRole {
+//   OWNER
+//   ADMIN
+//   MEMBER
+// }
+
+// enum InvitationStatus {
+//   PENDING
+//   ACCEPTED
+//   REJECTED
+//   EXPIRED
+// }
+
+// prisma/schema.prisma
+
 // prisma/schema.prisma
 
 generator client {
@@ -19,7 +227,6 @@ model User {
   email         String
   emailVerified Boolean
   image         String?
-  phone         String?
   createdAt     DateTime
   updatedAt     DateTime
 
@@ -44,7 +251,7 @@ model User {
   
   requestsCreated Request[]         @relation("RequestCreator")
   requestsApproved Request[]        @relation("RequestApprover")
-  qrScans         QRScan[]
+  qrScans         QREntry[]         @relation("QRScanner")
   
   userSectors   UserSector[]
 
@@ -54,7 +261,6 @@ model User {
   @@index([role])
   @@index([status])
   @@map("user")
-  qrentries QREntry[] @relation("QRScanner")
 }
 
 model Session {
@@ -183,14 +389,13 @@ model Department {
 // ============================================
 
 model Sector {
-  id                  String   @id @default(cuid())
-  name                String   @unique
-  description         String?
-  capacity            Int
-  requiresGuestList   Boolean  @default(false)
-  isActive            Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  capacity    Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tables       Table[]
   eventSectors EventSector[]
@@ -254,19 +459,16 @@ model Package {
 }
 
 model Event {
-  id                    String    @id @default(cuid())
-  name                  String
-  description           String?
-  eventDate             DateTime
-  image                 String?
-  paymentQR             String?
-  commissionAmount      Decimal?  @db.Decimal(10, 2)
-  freeInvitationQRCount Int       @default(0)
-  visibilityStart       DateTime
-  visibilityEnd         DateTime
-  isActive              Boolean   @default(true)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  name              String
+  description       String?
+  eventDate         DateTime
+  image             String?
+  visibilityStart   DateTime
+  visibilityEnd     DateTime
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   eventSectors      EventSector[]
   eventTables       EventTable[]
@@ -317,7 +519,6 @@ model Guest {
   identityCard      String
   phone             String?
   email             String?
-  instagramHandle   String?
   loyaltyPoints     Int      @default(0)
   eventsAttended    Int      @default(0)
   createdAt         DateTime @default(now())
@@ -330,7 +531,6 @@ model Guest {
   @@unique([identityCard])
   @@index([identityCard])
   @@index([loyaltyPoints])
-  @@index([instagramHandle])
   @@map("guest")
 }
 
@@ -343,15 +543,11 @@ model Request {
   createdById         String
   status              String    @default("PENDING")
   hasConsumption      Boolean   @default(false)
-  isPaid              Boolean   @default(false)
-  isPreApproved       Boolean   @default(false)
   extraGuests         Int       @default(0)
   termsAccepted       Boolean   @default(false)
   managerNotes        String?
   approvedById        String?
   approvedAt          DateTime?
-  preApprovedAt       DateTime?
-  paidAt              DateTime?
   reviewDuration      Int?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -372,18 +568,8 @@ model Request {
   @@index([createdById])
   @@index([approvedById])
   @@index([status])
-  @@index([isPaid])
-  @@index([isPreApproved])
   @@index([createdAt])
   @@map("request")
-}
-
-enum RequestStatus {
-  PENDING
-  OBSERVED
-  PRE_APPROVED
-  APPROVED
-  REJECTED
 }
 
 model GuestInvitation {
@@ -402,47 +588,23 @@ model GuestInvitation {
 }
 
 model QREntry {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  guestId         String
-  requestId       String
-  usageType       String    @default("SINGLE_USE")
-  maxUses         Int?
-  currentUses     Int       @default(0)
-  validFrom       DateTime?
-  validUntil      DateTime?
-  isActive        Boolean   @default(true)
-  scannedById     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  code        String    @unique
+  guestId     String
+  requestId   String
+  isUsed      Boolean   @default(false)
+  usedAt      DateTime?
+  scannedById String?
+  createdAt   DateTime  @default(now())
 
-  guest           Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  scannedBy       User?     @relation("QRScanner", fields: [scannedById], references: [id], onDelete: SetNull)
-  scanHistory     QRScan[]
+  guest       Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  scannedBy   User?     @relation("QRScanner", fields: [scannedById], references: [id], onDelete: SetNull)
 
   @@index([code])
   @@index([guestId])
   @@index([requestId])
-  @@index([isActive])
-  @@index([usageType])
+  @@index([isUsed])
   @@map("qr_entry")
-}
-
-model QRScan {
-  id          String    @id @default(cuid())
-  qrEntryId   String
-  scannedById String
-  scannedAt   DateTime  @default(now())
-  location    String?
-  notes       String?
-
-  qrEntry     QREntry   @relation(fields: [qrEntryId], references: [id], onDelete: Cascade)
-  scannedBy   User      @relation(fields: [scannedById], references: [id], onDelete: Cascade)
-
-  @@index([qrEntryId])
-  @@index([scannedById])
-  @@index([scannedAt])
-  @@map("qr_scan")
 }
 
 // ============================================
@@ -453,8 +615,6 @@ enum UserRole {
   SUPER_ADMIN
   ADMIN
   MANAGER
-  SUPERVISOR
-  VALIDATOR
   USER
 }
 
@@ -484,9 +644,9 @@ enum TableType {
   PREMIUM
 }
 
-enum QRUsageType {
-  SINGLE_USE
-  MULTI_USE
-  UNLIMITED
-  DATE_RANGE
+enum RequestStatus {
+  PENDING
+  OBSERVED
+  APPROVED
+  REJECTED
 }

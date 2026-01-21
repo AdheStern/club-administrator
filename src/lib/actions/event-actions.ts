@@ -1,9 +1,9 @@
-// src/lib/actions/event-actions.ts
-
 "use server";
 
+import { Decimal } from "@prisma/client/runtime/library";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { saveFile } from "@/lib/utils/file-upload";
 import type {
   ActionResult,
   PaginatedResult,
@@ -13,14 +13,18 @@ import type {
   CreateEventDTO,
   EventFilters,
   EventWithRelations,
+  EventWithRelationsDTO,
   UpdateEventDTO,
 } from "./types/event-types";
 
-interface ValidationStrategy {
-  validate(data: unknown): Promise<ActionResult<void>>;
+interface ValidationStrategy<T = unknown> {
+  validate(data: T): Promise<ActionResult<void>>;
 }
 
-class EventNameValidationStrategy implements ValidationStrategy {
+class EventNameValidationStrategy implements ValidationStrategy<{
+  name: string;
+  excludeId?: string;
+}> {
   async validate(data: {
     name: string;
     excludeId?: string;
@@ -47,7 +51,11 @@ class EventNameValidationStrategy implements ValidationStrategy {
   }
 }
 
-class EventDateValidationStrategy implements ValidationStrategy {
+class EventDateValidationStrategy implements ValidationStrategy<{
+  eventDate: Date;
+  visibilityStart: Date;
+  visibilityEnd: Date;
+}> {
   async validate(data: {
     eventDate: Date;
     visibilityStart: Date;
@@ -85,7 +93,7 @@ class EventDateValidationStrategy implements ValidationStrategy {
   }
 }
 
-class EventSectorsValidationStrategy implements ValidationStrategy {
+class EventSectorsValidationStrategy implements ValidationStrategy<string[]> {
   async validate(sectorIds: string[]): Promise<ActionResult<void>> {
     if (sectorIds.length === 0) {
       return {
@@ -114,7 +122,10 @@ class EventSectorsValidationStrategy implements ValidationStrategy {
   }
 }
 
-class EventTablesValidationStrategy implements ValidationStrategy {
+class EventTablesValidationStrategy implements ValidationStrategy<{
+  tableIds: string[];
+  sectorIds: string[];
+}> {
   async validate(data: {
     tableIds: string[];
     sectorIds: string[];
@@ -147,7 +158,7 @@ class EventTablesValidationStrategy implements ValidationStrategy {
     }
 
     const invalidTables = tables.filter(
-      (table) => !data.sectorIds.includes(table.sectorId)
+      (table) => !data.sectorIds.includes(table.sectorId),
     );
 
     if (invalidTables.length > 0) {
@@ -163,13 +174,28 @@ class EventTablesValidationStrategy implements ValidationStrategy {
 }
 
 class EventRepository {
-  async create(data: CreateEventDTO): Promise<EventWithRelations> {
-    return db.event.create({
+  private convertToDTO(event: EventWithRelations): EventWithRelationsDTO {
+    return {
+      ...event,
+      commissionAmount: event.commissionAmount
+        ? Number(event.commissionAmount)
+        : null,
+    };
+  }
+
+  async create(data: CreateEventDTO): Promise<EventWithRelationsDTO> {
+    const event = await db.event.create({
       data: {
         id: crypto.randomUUID(),
         name: data.name.trim(),
         description: data.description?.trim(),
         eventDate: data.eventDate,
+        image: data.image,
+        paymentQR: data.paymentQR,
+        commissionAmount: data.commissionAmount
+          ? new Decimal(data.commissionAmount)
+          : null,
+        freeInvitationQRCount: data.freeInvitationQRCount ?? 0,
         visibilityStart: data.visibilityStart,
         visibilityEnd: data.visibilityEnd,
         createdAt: new Date(),
@@ -227,18 +253,30 @@ class EventRepository {
         },
       },
     });
+
+    return this.convertToDTO(event);
   }
 
   async update(
     id: string,
-    data: Partial<UpdateEventDTO>
-  ): Promise<EventWithRelations> {
-    const updateData: any = {
+    data: Partial<UpdateEventDTO>,
+  ): Promise<EventWithRelationsDTO> {
+    const updateData: Record<string, unknown> = {
       ...(data.name && { name: data.name.trim() }),
       ...(data.description !== undefined && {
         description: data.description?.trim(),
       }),
       ...(data.eventDate && { eventDate: data.eventDate }),
+      ...(data.image !== undefined && { image: data.image }),
+      ...(data.paymentQR !== undefined && { paymentQR: data.paymentQR }),
+      ...(data.commissionAmount !== undefined && {
+        commissionAmount: data.commissionAmount
+          ? new Decimal(data.commissionAmount)
+          : null,
+      }),
+      ...(data.freeInvitationQRCount !== undefined && {
+        freeInvitationQRCount: data.freeInvitationQRCount,
+      }),
       ...(data.visibilityStart && { visibilityStart: data.visibilityStart }),
       ...(data.visibilityEnd && { visibilityEnd: data.visibilityEnd }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),
@@ -274,7 +312,7 @@ class EventRepository {
       };
     }
 
-    return db.event.update({
+    const event = await db.event.update({
       where: { id },
       data: updateData,
       include: {
@@ -314,10 +352,12 @@ class EventRepository {
         },
       },
     });
+
+    return this.convertToDTO(event);
   }
 
-  async findById(id: string): Promise<EventWithRelations | null> {
-    return db.event.findUnique({
+  async findById(id: string): Promise<EventWithRelationsDTO | null> {
+    const event = await db.event.findUnique({
       where: { id },
       include: {
         eventSectors: {
@@ -356,12 +396,14 @@ class EventRepository {
         },
       },
     });
+
+    return event ? this.convertToDTO(event) : null;
   }
 
   async findMany(
     filters: EventFilters,
-    pagination: PaginationParams
-  ): Promise<PaginatedResult<EventWithRelations>> {
+    pagination: PaginationParams,
+  ): Promise<PaginatedResult<EventWithRelationsDTO>> {
     const {
       page = 1,
       pageSize = 10,
@@ -370,7 +412,7 @@ class EventRepository {
     } = pagination;
     const skip = (page - 1) * pageSize;
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       ...(filters.isActive !== undefined && { isActive: filters.isActive }),
       ...(filters.search && {
         OR: [
@@ -388,14 +430,14 @@ class EventRepository {
     if (filters.dateFrom || filters.dateTo) {
       where.eventDate = {};
       if (filters.dateFrom) {
-        where.eventDate.gte = filters.dateFrom;
+        (where.eventDate as Record<string, Date>).gte = filters.dateFrom;
       }
       if (filters.dateTo) {
-        where.eventDate.lte = filters.dateTo;
+        (where.eventDate as Record<string, Date>).lte = filters.dateTo;
       }
     }
 
-    const [data, total] = await Promise.all([
+    const [events, total] = await Promise.all([
       db.event.findMany({
         where,
         skip,
@@ -442,7 +484,7 @@ class EventRepository {
     ]);
 
     return {
-      data,
+      data: events.map((event) => this.convertToDTO(event)),
       total,
       page,
       pageSize,
@@ -454,7 +496,7 @@ class EventRepository {
     await db.event.delete({ where: { id } });
   }
 
-  async toggleStatus(id: string): Promise<EventWithRelations> {
+  async toggleStatus(id: string): Promise<EventWithRelationsDTO> {
     const event = await this.findById(id);
 
     if (!event) {
@@ -473,15 +515,19 @@ class EventService {
   private tablesValidation = new EventTablesValidationStrategy();
 
   async createEvent(
-    dto: CreateEventDTO
-  ): Promise<ActionResult<EventWithRelations>> {
+    dto: CreateEventDTO,
+  ): Promise<ActionResult<EventWithRelationsDTO>> {
     try {
       const nameValidation = await this.nameValidation.validate({
         name: dto.name,
       });
 
       if (!nameValidation.success) {
-        return nameValidation;
+        return {
+          success: false,
+          error: nameValidation.error,
+          code: nameValidation.code,
+        };
       }
 
       const dateValidation = await this.dateValidation.validate({
@@ -491,15 +537,23 @@ class EventService {
       });
 
       if (!dateValidation.success) {
-        return dateValidation;
+        return {
+          success: false,
+          error: dateValidation.error,
+          code: dateValidation.code,
+        };
       }
 
       const sectorsValidation = await this.sectorsValidation.validate(
-        dto.sectorIds
+        dto.sectorIds,
       );
 
       if (!sectorsValidation.success) {
-        return sectorsValidation;
+        return {
+          success: false,
+          error: sectorsValidation.error,
+          code: sectorsValidation.code,
+        };
       }
 
       const tablesValidation = await this.tablesValidation.validate({
@@ -508,7 +562,11 @@ class EventService {
       });
 
       if (!tablesValidation.success) {
-        return tablesValidation;
+        return {
+          success: false,
+          error: tablesValidation.error,
+          code: tablesValidation.code,
+        };
       }
 
       const event = await this.repository.create(dto);
@@ -529,8 +587,8 @@ class EventService {
   }
 
   async updateEvent(
-    dto: UpdateEventDTO
-  ): Promise<ActionResult<EventWithRelations>> {
+    dto: UpdateEventDTO,
+  ): Promise<ActionResult<EventWithRelationsDTO>> {
     try {
       const event = await this.repository.findById(dto.id);
 
@@ -549,7 +607,11 @@ class EventService {
         });
 
         if (!nameValidation.success) {
-          return nameValidation;
+          return {
+            success: false,
+            error: nameValidation.error,
+            code: nameValidation.code,
+          };
         }
       }
 
@@ -561,17 +623,25 @@ class EventService {
         });
 
         if (!dateValidation.success) {
-          return dateValidation;
+          return {
+            success: false,
+            error: dateValidation.error,
+            code: dateValidation.code,
+          };
         }
       }
 
       if (dto.sectorIds) {
         const sectorsValidation = await this.sectorsValidation.validate(
-          dto.sectorIds
+          dto.sectorIds,
         );
 
         if (!sectorsValidation.success) {
-          return sectorsValidation;
+          return {
+            success: false,
+            error: sectorsValidation.error,
+            code: sectorsValidation.code,
+          };
         }
       }
 
@@ -582,7 +652,11 @@ class EventService {
         });
 
         if (!tablesValidation.success) {
-          return tablesValidation;
+          return {
+            success: false,
+            error: tablesValidation.error,
+            code: tablesValidation.code,
+          };
         }
       }
 
@@ -604,7 +678,7 @@ class EventService {
     }
   }
 
-  async getEventById(id: string): Promise<ActionResult<EventWithRelations>> {
+  async getEventById(id: string): Promise<ActionResult<EventWithRelationsDTO>> {
     try {
       const event = await this.repository.findById(id);
 
@@ -632,8 +706,8 @@ class EventService {
 
   async getEvents(
     filters: EventFilters = {},
-    pagination: PaginationParams = {}
-  ): Promise<ActionResult<PaginatedResult<EventWithRelations>>> {
+    pagination: PaginationParams = {},
+  ): Promise<ActionResult<PaginatedResult<EventWithRelationsDTO>>> {
     try {
       const result = await this.repository.findMany(filters, pagination);
 
@@ -722,7 +796,7 @@ export async function getEventById(id: string) {
 
 export async function getEvents(
   filters?: EventFilters,
-  pagination?: PaginationParams
+  pagination?: PaginationParams,
 ) {
   return eventService.getEvents(filters, pagination);
 }
@@ -733,4 +807,34 @@ export async function deleteEvent(id: string) {
 
 export async function toggleEventStatus(id: string) {
   return eventService.toggleEventStatus(id);
+}
+
+export async function uploadEventImage(
+  file: File,
+): Promise<ActionResult<string>> {
+  try {
+    const path = await saveFile(file, "events");
+    return { success: true, data: path };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al subir imagen",
+      code: "UPLOAD_ERROR",
+    };
+  }
+}
+
+export async function uploadPaymentQR(
+  file: File,
+): Promise<ActionResult<string>> {
+  try {
+    const path = await saveFile(file, "payment-qr");
+    return { success: true, data: path };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al subir QR",
+      code: "UPLOAD_ERROR",
+    };
+  }
 }

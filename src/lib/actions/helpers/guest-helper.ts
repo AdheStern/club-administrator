@@ -17,6 +17,7 @@ export class GuestHelper {
           identityCard: data.identityCard,
           phone: data.phone,
           email: data.email,
+          instagramHandle: data.instagramHandle,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -28,6 +29,7 @@ export class GuestHelper {
           name: data.name,
           phone: data.phone ?? guest.phone,
           email: data.email ?? guest.email,
+          instagramHandle: data.instagramHandle ?? guest.instagramHandle,
           updatedAt: new Date(),
         },
       });

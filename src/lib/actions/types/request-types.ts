@@ -1,12 +1,13 @@
 // src/lib/actions/types/request-types.ts
 
-import type { Request } from "@prisma/client";
+import type { Decimal } from "@prisma/client/runtime/library";
 
 export interface GuestData {
   name: string;
   identityCard: string;
   phone?: string;
   email?: string;
+  instagramHandle?: string;
 }
 
 export interface CreateRequestDTO {
@@ -23,10 +24,19 @@ export interface CreateRequestDTO {
 
 export interface UpdateRequestDTO {
   id: string;
-  clientData?: GuestData;
-  guestList?: GuestData[];
-  hasConsumption?: boolean;
-  extraGuests?: number;
+  clientData: GuestData;
+  guestList: GuestData[];
+  hasConsumption: boolean;
+  extraGuests: number;
+}
+
+export interface PreApproveRequestDTO {
+  id: string;
+  approvedById: string;
+}
+
+export interface MarkAsPaidDTO {
+  id: string;
 }
 
 export interface ApproveRequestDTO {
@@ -36,31 +46,53 @@ export interface ApproveRequestDTO {
 
 export interface ObserveRequestDTO {
   id: string;
-  managerNotes: string;
   approvedById: string;
+  managerNotes: string;
 }
 
 export interface RejectRequestDTO {
   id: string;
-  managerNotes: string;
   approvedById: string;
+  managerNotes: string;
 }
 
 export interface RequestFilters {
-  search?: string;
   status?: string;
   eventId?: string;
   createdById?: string;
+  search?: string;
   dateFrom?: Date;
   dateTo?: Date;
 }
 
-export type RequestWithRelations = Request & {
+export interface RequestWithRelations {
+  id: string;
+  eventId: string;
+  tableId: string;
+  packageId: string;
+  clientId: string;
+  createdById: string;
+  status: string;
+  hasConsumption: boolean;
+  isPaid: boolean;
+  isPreApproved: boolean;
+  extraGuests: number;
+  termsAccepted: boolean;
+  managerNotes: string | null;
+  approvedById: string | null;
+  approvedAt: Date | null;
+  preApprovedAt: Date | null;
+  paidAt: Date | null;
+  reviewDuration: number | null;
+  createdAt: Date;
+  updatedAt: Date;
   event: {
     id: string;
     name: string;
     eventDate: Date;
     image: string | null;
+    freeInvitationQRCount: number;
+    paymentQR: string | null;
   };
   table: {
     id: string;
@@ -68,14 +100,19 @@ export type RequestWithRelations = Request & {
     sector: {
       id: string;
       name: string;
+      requiresGuestList: boolean;
     };
   };
   package: {
     id: string;
     name: string;
+    description: string | null;
     includedPeople: number;
-    basePrice: number;
-    extraPersonPrice: number | null;
+    basePrice: number | Decimal;
+    extraPersonPrice: number | Decimal | null;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
   };
   client: {
     id: string;
@@ -83,11 +120,17 @@ export type RequestWithRelations = Request & {
     identityCard: string;
     phone: string | null;
     email: string | null;
+    instagramHandle: string | null;
+    loyaltyPoints: number;
+    eventsAttended: number;
+    createdAt: Date;
+    updatedAt: Date;
   };
   createdBy: {
     id: string;
     name: string;
     email: string;
+    phone: string | null;
   };
   approvedBy: {
     id: string;
@@ -95,17 +138,20 @@ export type RequestWithRelations = Request & {
   } | null;
   guestInvitations: Array<{
     id: string;
+    requestId: string;
+    guestId: string;
+    createdAt: Date;
     guest: {
       id: string;
       name: string;
       identityCard: string;
+      phone: string | null;
+      email: string | null;
+      instagramHandle: string | null;
+      loyaltyPoints: number;
+      eventsAttended: number;
+      createdAt: Date;
+      updatedAt: Date;
     };
   }>;
-};
-
-export enum RequestStatus {
-  PENDING = "PENDING",
-  OBSERVED = "OBSERVED",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
 }

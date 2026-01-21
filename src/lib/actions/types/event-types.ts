@@ -1,11 +1,16 @@
 // src/lib/actions/types/event-types.ts
 
 import type { Event } from "@prisma/client";
+import type { Decimal } from "@prisma/client/runtime/library";
 
 export interface CreateEventDTO {
   name: string;
   description?: string;
   eventDate: Date;
+  image?: string;
+  paymentQR?: string;
+  commissionAmount?: number;
+  freeInvitationQRCount?: number;
   visibilityStart: Date;
   visibilityEnd: Date;
   sectorIds: string[];
@@ -17,6 +22,10 @@ export interface UpdateEventDTO {
   name?: string;
   description?: string;
   eventDate?: Date;
+  image?: string;
+  paymentQR?: string;
+  commissionAmount?: number;
+  freeInvitationQRCount?: number;
   visibilityStart?: Date;
   visibilityEnd?: Date;
   isActive?: boolean;
@@ -57,4 +66,11 @@ export type EventWithRelations = Event & {
     eventSectors: number;
     eventTables: number;
   };
+};
+
+export type EventWithRelationsDTO = Omit<
+  EventWithRelations,
+  "commissionAmount"
+> & {
+  commissionAmount: number | null;
 };

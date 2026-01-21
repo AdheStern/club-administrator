@@ -1,5 +1,3 @@
-// src/components/system/requests/request-list.tsx
-
 "use client";
 
 import { Filter, Plus, Search } from "lucide-react";
@@ -20,6 +18,7 @@ import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import {
   ApproveDialog,
   ObserveDialog,
+  PreApproveDialog,
   RejectDialog,
 } from "./manager-action-dialog";
 import { RequestCard } from "./request-card";
@@ -50,13 +49,14 @@ export function RequestList({
     useState<RequestWithRelations | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isPreApproveOpen, setIsPreApproveOpen] = useState(false);
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [isObserveOpen, setIsObserveOpen] = useState(false);
   const [isRejectOpen, setIsRejectOpen] = useState(false);
 
   const isManager = ["MANAGER", "ADMIN", "SUPER_ADMIN"].includes(userRole);
   const canCreate = ["USER", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(
-    userRole
+    userRole,
   );
 
   const visibleRequests = isManager
@@ -92,7 +92,11 @@ export function RequestList({
 
   const handleApprove = (request: RequestWithRelations) => {
     setSelectedRequest(request);
-    setIsApproveOpen(true);
+    if (request.status === "PRE_APPROVED") {
+      setIsApproveOpen(true);
+    } else {
+      setIsPreApproveOpen(true);
+    }
   };
 
   const handleObserve = (request: RequestWithRelations) => {
@@ -115,7 +119,7 @@ export function RequestList({
   };
 
   const upcomingEvents = events.filter(
-    (e) => e.isActive && new Date(e.eventDate) > new Date()
+    (e) => e.isActive && new Date(e.eventDate) > new Date(),
   );
 
   return (
@@ -162,6 +166,7 @@ export function RequestList({
                     <SelectItem value="all">Todos los estados</SelectItem>
                     <SelectItem value="PENDING">Pendiente</SelectItem>
                     <SelectItem value="OBSERVED">Observada</SelectItem>
+                    <SelectItem value="PRE_APPROVED">Pre-Aprobada</SelectItem>
                     <SelectItem value="APPROVED">Aprobada</SelectItem>
                     <SelectItem value="REJECTED">Rechazada</SelectItem>
                   </SelectContent>
@@ -190,8 +195,8 @@ export function RequestList({
                 {searchQuery || statusFilter !== "all" || eventFilter !== "all"
                   ? "No se encontraron solicitudes con los filtros aplicados"
                   : isManager
-                  ? "No hay solicitudes creadas"
-                  : "No has creado ninguna solicitud"}
+                    ? "No hay solicitudes creadas"
+                    : "No has creado ninguna solicitud"}
               </p>
               {!searchQuery &&
                 statusFilter === "all" &&
@@ -222,6 +227,7 @@ export function RequestList({
                   onReject={handleReject}
                   canEdit={request.createdById === userId}
                   canManage={isManager}
+                  onRefresh={handleSuccess}
                 />
               ))}
             </div>
@@ -246,6 +252,14 @@ export function RequestList({
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
         request={selectedRequest}
+      />
+
+      <PreApproveDialog
+        open={isPreApproveOpen}
+        onOpenChange={setIsPreApproveOpen}
+        request={selectedRequest}
+        userId={userId}
+        onSuccess={handleSuccess}
       />
 
       <ApproveDialog

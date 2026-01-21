@@ -16,11 +16,14 @@ import type {
   UpdateSectorDTO,
 } from "./types/sector-types";
 
-interface ValidationStrategy {
-  validate(data: unknown): Promise<ActionResult<void>>;
+interface ValidationStrategy<T = unknown> {
+  validate(data: T): Promise<ActionResult<void>>;
 }
 
-class SectorNameValidationStrategy implements ValidationStrategy {
+class SectorNameValidationStrategy implements ValidationStrategy<{
+  name: string;
+  excludeId?: string;
+}> {
   async validate(data: {
     name: string;
     excludeId?: string;
@@ -65,7 +68,7 @@ class SectorNameValidationStrategy implements ValidationStrategy {
   }
 }
 
-class CapacityValidationStrategy implements ValidationStrategy {
+class CapacityValidationStrategy implements ValidationStrategy<number> {
   async validate(capacity: number): Promise<ActionResult<void>> {
     if (capacity < 1) {
       return {
@@ -95,6 +98,7 @@ class SectorRepository {
         name: data.name.trim(),
         description: data.description?.trim(),
         capacity: data.capacity,
+        requiresGuestList: data.requiresGuestList ?? false,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -111,7 +115,7 @@ class SectorRepository {
 
   async update(
     id: string,
-    data: Partial<UpdateSectorDTO>
+    data: Partial<UpdateSectorDTO>,
   ): Promise<SectorWithRelations> {
     return db.sector.update({
       where: { id },
@@ -121,6 +125,9 @@ class SectorRepository {
           description: data.description?.trim(),
         }),
         ...(data.capacity && { capacity: data.capacity }),
+        ...(data.requiresGuestList !== undefined && {
+          requiresGuestList: data.requiresGuestList,
+        }),
         ...(data.isActive !== undefined && { isActive: data.isActive }),
         updatedAt: new Date(),
       },
@@ -151,7 +158,7 @@ class SectorRepository {
 
   async findMany(
     filters: SectorFilters,
-    pagination: PaginationParams
+    pagination: PaginationParams,
   ): Promise<PaginatedResult<SectorWithRelations>> {
     const {
       page = 1,
@@ -163,6 +170,9 @@ class SectorRepository {
 
     const where = {
       ...(filters.isActive !== undefined && { isActive: filters.isActive }),
+      ...(filters.requiresGuestList !== undefined && {
+        requiresGuestList: filters.requiresGuestList,
+      }),
       ...(filters.search && {
         OR: [
           { name: { contains: filters.search, mode: "insensitive" as const } },
@@ -224,7 +234,7 @@ class SectorService {
   private capacityValidation = new CapacityValidationStrategy();
 
   async createSector(
-    dto: CreateSectorDTO
+    dto: CreateSectorDTO,
   ): Promise<ActionResult<SectorWithRelations>> {
     try {
       const nameValidation = await this.nameValidation.validate({
@@ -232,15 +242,23 @@ class SectorService {
       });
 
       if (!nameValidation.success) {
-        return nameValidation;
+        return {
+          success: false,
+          error: nameValidation.error,
+          code: nameValidation.code,
+        };
       }
 
       const capacityValidation = await this.capacityValidation.validate(
-        dto.capacity
+        dto.capacity,
       );
 
       if (!capacityValidation.success) {
-        return capacityValidation;
+        return {
+          success: false,
+          error: capacityValidation.error,
+          code: capacityValidation.code,
+        };
       }
 
       const sector = await this.repository.create(dto);
@@ -261,7 +279,7 @@ class SectorService {
   }
 
   async updateSector(
-    dto: UpdateSectorDTO
+    dto: UpdateSectorDTO,
   ): Promise<ActionResult<SectorWithRelations>> {
     try {
       const sector = await this.repository.findById(dto.id);
@@ -281,17 +299,25 @@ class SectorService {
         });
 
         if (!nameValidation.success) {
-          return nameValidation;
+          return {
+            success: false,
+            error: nameValidation.error,
+            code: nameValidation.code,
+          };
         }
       }
 
       if (dto.capacity) {
         const capacityValidation = await this.capacityValidation.validate(
-          dto.capacity
+          dto.capacity,
         );
 
         if (!capacityValidation.success) {
-          return capacityValidation;
+          return {
+            success: false,
+            error: capacityValidation.error,
+            code: capacityValidation.code,
+          };
         }
       }
 
@@ -341,7 +367,7 @@ class SectorService {
 
   async getSectors(
     filters: SectorFilters = {},
-    pagination: PaginationParams = {}
+    pagination: PaginationParams = {},
   ): Promise<ActionResult<PaginatedResult<SectorWithRelations>>> {
     try {
       const result = await this.repository.findMany(filters, pagination);
@@ -439,7 +465,7 @@ export async function getSectorById(id: string) {
 
 export async function getSectors(
   filters?: SectorFilters,
-  pagination?: PaginationParams
+  pagination?: PaginationParams,
 ) {
   return sectorService.getSectors(filters, pagination);
 }

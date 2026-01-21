@@ -2,7 +2,13 @@
 
 "use client";
 
-import { Building2, MoreVertical, Table, Users } from "lucide-react";
+import {
+  Building2,
+  ClipboardList,
+  MoreVertical,
+  Table,
+  Users,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -33,7 +39,7 @@ export function SectorCard({
     <Card
       className={cn(
         "hover:shadow-md transition-all duration-200",
-        !sector.isActive && "opacity-60"
+        !sector.isActive && "opacity-60",
       )}
     >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
@@ -45,15 +51,22 @@ export function SectorCard({
             <h3 className="font-semibold text-lg leading-none">
               {sector.name}
             </h3>
-            <Badge
-              variant={sector.isActive ? "default" : "secondary"}
-              className="mt-1"
-            >
-              {sector.isActive ? "Activo" : "Inactivo"}
-            </Badge>
+            <div className="flex gap-2">
+              <Badge
+                variant={sector.isActive ? "default" : "secondary"}
+                className="mt-1"
+              >
+                {sector.isActive ? "Activo" : "Inactivo"}
+              </Badge>
+              {sector.requiresGuestList && (
+                <Badge variant="outline" className="mt-1">
+                  <ClipboardList className="h-3 w-3 mr-1" />
+                  Lista requerida
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -78,14 +91,12 @@ export function SectorCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </CardHeader>
-
       <CardContent className="space-y-3">
         {sector.description && (
           <p className="text-sm text-muted-foreground line-clamp-2">
             {sector.description}
           </p>
         )}
-
         <div className="grid grid-cols-2 gap-3 pt-2">
           <div className="flex items-center gap-2 text-sm">
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -94,7 +105,6 @@ export function SectorCard({
               <p className="text-xs text-muted-foreground">Capacidad</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 text-sm">
             <Table className="h-4 w-4 text-muted-foreground" />
             <div>

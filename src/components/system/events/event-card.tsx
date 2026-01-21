@@ -4,7 +4,15 @@
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Calendar, LayoutGrid, MoreVertical, Table } from "lucide-react";
+import {
+  Calendar,
+  Image as ImageIcon,
+  LayoutGrid,
+  MoreVertical,
+  QrCode,
+  Table,
+} from "lucide-react";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,14 +23,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { EventWithRelations } from "@/lib/actions/types/event-types";
+import type { EventWithRelationsDTO } from "@/lib/actions/types/event-types";
 import { cn } from "@/lib/utils";
 
 interface EventCardProps {
-  event: EventWithRelations;
-  onEdit: (event: EventWithRelations) => void;
-  onDelete: (event: EventWithRelations) => void;
-  onToggleStatus: (event: EventWithRelations) => void;
+  event: EventWithRelationsDTO;
+  onEdit: (event: EventWithRelationsDTO) => void;
+  onDelete: (event: EventWithRelationsDTO) => void;
+  onToggleStatus: (event: EventWithRelationsDTO) => void;
 }
 
 export function EventCard({
@@ -33,14 +41,31 @@ export function EventCard({
 }: EventCardProps) {
   const isUpcoming = new Date(event.eventDate) > new Date();
   const isPast = new Date(event.eventDate) < new Date();
+  const imageUrl = event.image ? `/uploads/${event.image}` : null;
 
   return (
     <Card
       className={cn(
-        "hover:shadow-md transition-all duration-200",
-        !event.isActive && "opacity-60"
+        "hover:shadow-md transition-all duration-200 overflow-hidden",
+        !event.isActive && "opacity-60",
       )}
     >
+      {imageUrl ? (
+        <div className="relative w-full aspect-[9/16] bg-muted">
+          <Image
+            src={imageUrl}
+            alt={event.name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+        </div>
+      ) : (
+        <div className="relative w-full aspect-[9/16] bg-muted flex items-center justify-center">
+          <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
+        </div>
+      )}
+
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="space-y-2 flex-1">
           <div className="flex items-center gap-2">
@@ -69,6 +94,15 @@ export function EventCard({
                 className="text-xs bg-gray-50 text-gray-700 border-gray-200"
               >
                 Finalizado
+              </Badge>
+            )}
+            {event.paymentQR && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-green-50 text-green-700 border-green-200"
+              >
+                <QrCode className="h-3 w-3 mr-1" />
+                QR Pago
               </Badge>
             )}
           </div>
@@ -119,6 +153,24 @@ export function EventCard({
             </p>
           </div>
         </div>
+
+        {(event.commissionAmount !== null ||
+          event.freeInvitationQRCount > 0) && (
+          <div className="pt-2 border-t space-y-1 text-sm">
+            {event.commissionAmount !== null && (
+              <p className="text-muted-foreground">
+                <span className="font-medium">Comisión:</span> Bs.{" "}
+                {event.commissionAmount.toFixed(2)}
+              </p>
+            )}
+            {event.freeInvitationQRCount > 0 && (
+              <p className="text-muted-foreground">
+                <span className="font-medium">QR gratis:</span>{" "}
+                {event.freeInvitationQRCount} por reserva
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="pt-2 border-t">
           <div className="grid grid-cols-2 gap-3 text-sm">

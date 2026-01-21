@@ -1,5 +1,3 @@
-// src/components/system/requests/manager-action-dialog.tsx
-
 "use client";
 
 import { Loader2 } from "lucide-react";
@@ -19,9 +17,18 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   approveRequest,
   observeRequest,
+  preApproveRequest,
   rejectRequest,
 } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
+
+interface PreApproveDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  request: RequestWithRelations | null;
+  userId: string;
+  onSuccess: () => void;
+}
 
 interface ApproveDialogProps {
   open: boolean;
@@ -47,6 +54,101 @@ interface RejectDialogProps {
   onSuccess: () => void;
 }
 
+export function PreApproveDialog({
+  open,
+  onOpenChange,
+  request,
+  userId,
+  onSuccess,
+}: PreApproveDialogProps) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handlePreApprove = async () => {
+    if (!request) return;
+
+    setIsLoading(true);
+    try {
+      const result = await preApproveRequest({
+        id: request.id,
+        approvedById: userId,
+      });
+
+      if (result.success) {
+        toast.success("Solicitud pre-aprobada. Esperando pago.");
+        onSuccess();
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Error al pre-aprobar solicitud");
+      }
+    } catch (error) {
+      toast.error("Ocurrió un error inesperado");
+      console.error("Pre-approve error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!request) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>¿Pre-aprobar solicitud?</DialogTitle>
+          <DialogDescription>
+            La solicitud será marcada como pre-aprobada y se mostrará el QR de
+            pago. Una vez confirmado el pago, podrás aprobar definitivamente la
+            solicitud.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Evento:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.event?.name || "N/A"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Cliente:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.client?.name || "N/A"} - CI:{" "}
+              {request.client?.identityCard || "N/A"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Solicitante:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.createdBy?.name || "Sistema"}
+              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Total de personas:</p>
+            <p className="text-sm text-muted-foreground">
+              {(request.guestInvitations?.length || 0) + 1}
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button onClick={handlePreApprove} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Pre-Aprobar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ApproveDialog({
   open,
   onOpenChange,
@@ -59,6 +161,11 @@ export function ApproveDialog({
   const handleApprove = async () => {
     if (!request) return;
 
+    if (request.status === "PRE_APPROVED" && !request.isPaid) {
+      toast.error("Debe marcar como pagada antes de aprobar definitivamente");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await approveRequest({
@@ -69,7 +176,6 @@ export function ApproveDialog({
       if (result.success && result.data) {
         toast.success("Solicitud aprobada correctamente");
 
-        // Descargar automáticamente el PDF con los QR
         try {
           const blob = new Blob([result.data.qrPDFContent], {
             type: "text/html",
@@ -82,6 +188,20 @@ export function ApproveDialog({
           link.click();
           document.body.removeChild(link);
           URL.revokeObjectURL(url);
+
+          if (result.data.freeQRPDFContent) {
+            const freeBlob = new Blob([result.data.freeQRPDFContent], {
+              type: "text/html",
+            });
+            const freeUrl = URL.createObjectURL(freeBlob);
+            const freeLink = document.createElement("a");
+            freeLink.href = freeUrl;
+            freeLink.download = `QR-${request.event.name}-${request.client.name}-GRATIS.html`;
+            document.body.appendChild(freeLink);
+            freeLink.click();
+            document.body.removeChild(freeLink);
+            URL.revokeObjectURL(freeUrl);
+          }
 
           toast.success("Códigos QR descargados automáticamente");
         } catch (downloadError) {
@@ -104,15 +224,21 @@ export function ApproveDialog({
 
   if (!request) return null;
 
+  const isPreApproved = request.status === "PRE_APPROVED";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>¿Aprobar solicitud?</DialogTitle>
+          <DialogTitle>
+            {isPreApproved
+              ? "¿Aprobar definitivamente?"
+              : "¿Aprobar solicitud?"}
+          </DialogTitle>
           <DialogDescription>
-            Esta acción generará códigos QR para todos los invitados y marcará
-            la solicitud como aprobada. Los códigos QR se descargarán
-            automáticamente.
+            {isPreApproved
+              ? "Esta acción generará los códigos QR para todos los invitados y finalizará el proceso de aprobación."
+              : "Esta acción pre-aprobará la solicitud. Deberás confirmar el pago antes de la aprobación definitiva."}
           </DialogDescription>
         </DialogHeader>
 
@@ -131,11 +257,28 @@ export function ApproveDialog({
             </p>
           </div>
           <div className="space-y-2">
+            <p className="text-sm font-medium">Solicitante:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.createdBy?.name || "Sistema"}
+              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
+            </p>
+          </div>
+          <div className="space-y-2">
             <p className="text-sm font-medium">Total de personas:</p>
             <p className="text-sm text-muted-foreground">
               {(request.guestInvitations?.length || 0) + 1}
             </p>
           </div>
+          {isPreApproved && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Estado de pago:</p>
+              <p
+                className={`text-sm font-semibold ${request.isPaid ? "text-green-600" : "text-red-600"}`}
+              >
+                {request.isPaid ? "✓ Pagado" : "✗ No pagado"}
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -146,9 +289,12 @@ export function ApproveDialog({
           >
             Cancelar
           </Button>
-          <Button onClick={handleApprove} disabled={isLoading}>
+          <Button
+            onClick={handleApprove}
+            disabled={isLoading || (isPreApproved && !request.isPaid)}
+          >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Aprobar y Descargar QR
+            {isPreApproved ? "Aprobar y Descargar QR" : "Pre-Aprobar"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -228,6 +374,13 @@ export function ObserveDialog({
             <p className="text-sm text-muted-foreground">
               {request.client?.name || "N/A"} - CI:{" "}
               {request.client?.identityCard || "N/A"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Solicitante:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.createdBy?.name || "Sistema"}
+              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
             </p>
           </div>
 
@@ -335,6 +488,13 @@ export function RejectDialog({
             <p className="text-sm text-muted-foreground">
               {request.client?.name || "N/A"} - CI:{" "}
               {request.client?.identityCard || "N/A"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Solicitante:</p>
+            <p className="text-sm text-muted-foreground">
+              {request.createdBy?.name || "Sistema"}
+              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
             </p>
           </div>
 

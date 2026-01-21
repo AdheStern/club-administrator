@@ -44,3 +44,7 @@ next-env.d.ts
 
 # seed
 /prisma/seed.ts
+
+# local uploads
+public/uploads/*
+!public/uploads/.gitkeep

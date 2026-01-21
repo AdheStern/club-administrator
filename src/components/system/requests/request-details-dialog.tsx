@@ -1,5 +1,3 @@
-// src/components/system/requests/request-details-dialog.tsx
-
 "use client";
 
 import { format } from "date-fns";
@@ -15,6 +13,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +46,11 @@ const statusConfig = {
     label: "Observada",
     icon: Clock,
     className: "bg-orange-100 text-orange-800 border-orange-200",
+  },
+  PRE_APPROVED: {
+    label: "Pre-Aprobada",
+    icon: Clock,
+    className: "bg-blue-100 text-blue-800 border-blue-200",
   },
   APPROVED: {
     label: "Aprobada",
@@ -127,6 +131,20 @@ export function RequestDetailsDialog({
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
+        if (result.data.freeQRPDFContent) {
+          const freeBlob = new Blob([result.data.freeQRPDFContent], {
+            type: "text/html",
+          });
+          const freeUrl = URL.createObjectURL(freeBlob);
+          const freeLink = document.createElement("a");
+          freeLink.href = freeUrl;
+          freeLink.download = `${result.data.fileName}-GRATIS.html`;
+          document.body.appendChild(freeLink);
+          freeLink.click();
+          document.body.removeChild(freeLink);
+          URL.revokeObjectURL(freeUrl);
+        }
+
         toast.success("Códigos QR descargados correctamente");
       } else {
         toast.error(result.error || "Error al descargar códigos QR");
@@ -162,7 +180,28 @@ export function RequestDetailsDialog({
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
-          {/* Botón de descarga para solicitudes aprobadas */}
+          {request.status === "PRE_APPROVED" && request.event.paymentQR && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-900 mb-3">
+                QR de Pago - Esperando confirmación
+              </h3>
+              <div className="relative w-full aspect-square max-w-[300px] mx-auto">
+                <Image
+                  src={`/uploads/${request.event.paymentQR}`}
+                  alt="QR de Pago"
+                  fill
+                  className="object-contain rounded-lg"
+                />
+              </div>
+              <p className="text-sm text-blue-800 mt-3 text-center">
+                Estado de pago:{" "}
+                <span className="font-semibold">
+                  {request.isPaid ? "✓ Pagado" : "⏳ Pendiente"}
+                </span>
+              </p>
+            </div>
+          )}
+
           {request.status === "APPROVED" && (
             <Button
               variant="default"
@@ -175,7 +214,6 @@ export function RequestDetailsDialog({
             </Button>
           )}
 
-          {/* Información del Evento */}
           <div className="space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
@@ -195,12 +233,16 @@ export function RequestDetailsDialog({
                   </span>
                 </div>
               )}
+              {request.event?.freeInvitationQRCount > 0 && (
+                <Badge variant="outline" className="bg-yellow-700">
+                  {request.event.freeInvitationQRCount} QR gratuitos incluidos
+                </Badge>
+              )}
             </div>
           </div>
 
           <Separator />
 
-          {/* Información de Mesa */}
           <div className="space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <MapPin className="h-5 w-5 text-primary" />
@@ -222,7 +264,6 @@ export function RequestDetailsDialog({
 
           <Separator />
 
-          {/* Información del Paquete */}
           <div className="space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Package className="h-5 w-5 text-primary" />
@@ -278,7 +319,6 @@ export function RequestDetailsDialog({
 
           <Separator />
 
-          {/* Información del Cliente */}
           <div className="space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
@@ -316,7 +356,6 @@ export function RequestDetailsDialog({
 
           <Separator />
 
-          {/* Lista de Invitados */}
           <div className="space-y-3">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
@@ -347,7 +386,6 @@ export function RequestDetailsDialog({
             )}
           </div>
 
-          {/* Notas del Manager */}
           {request.managerNotes && (
             <>
               <Separator />
@@ -362,13 +400,17 @@ export function RequestDetailsDialog({
 
           <Separator />
 
-          {/* Información de Gestión */}
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground mb-1">Creado por</p>
+              <p className="text-muted-foreground mb-1">Solicitante</p>
               <p className="font-medium">
                 {request.createdBy?.name || "Sistema"}
               </p>
+              {request.createdBy?.phone && (
+                <p className="text-xs text-muted-foreground">
+                  Tel: {request.createdBy.phone}
+                </p>
+              )}
             </div>
             {request.approvedBy && (
               <div>

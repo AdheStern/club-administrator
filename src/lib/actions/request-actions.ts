@@ -1,5 +1,3 @@
-// src/lib/actions/request-actions.ts
-
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -15,681 +13,149 @@ import type {
 import type {
   ApproveRequestDTO,
   CreateRequestDTO,
+  MarkAsPaidDTO,
   ObserveRequestDTO,
+  PreApproveRequestDTO,
   RejectRequestDTO,
   RequestFilters,
   RequestWithRelations,
   UpdateRequestDTO,
 } from "./types/request-types";
 
-interface ValidationStrategy {
-  validate(data: unknown): Promise<ActionResult<void>>;
-}
-
-class TableAvailabilityValidationStrategy implements ValidationStrategy {
-  async validate(data: {
-    tableId: string;
-    eventId: string;
-    excludeRequestId?: string;
-  }): Promise<ActionResult<void>> {
-    const eventTable = await db.eventTable.findUnique({
-      where: {
-        eventId_tableId: {
-          eventId: data.eventId,
-          tableId: data.tableId,
-        },
-      },
+class RequestRepository {
+  async create(dto: CreateRequestDTO) {
+    const table = await db.table.findUnique({
+      where: { id: dto.tableId },
+      include: { sector: true },
     });
 
-    if (!eventTable) {
-      return {
-        success: false,
-        error: "La mesa no está disponible para este evento",
-        code: "TABLE_NOT_IN_EVENT",
-      };
-    }
+    if (!table) throw new Error("Mesa no encontrada");
 
-    const existingRequest = await db.request.findFirst({
-      where: {
-        eventId: data.eventId,
-        tableId: data.tableId,
-        status: { in: ["PENDING", "OBSERVED", "APPROVED"] },
-        ...(data.excludeRequestId && { id: { not: data.excludeRequestId } }),
-      },
-    });
+    const client = await GuestHelper.findOrCreateGuest(dto.clientData);
+    const guestIds: string[] = [];
 
-    if (existingRequest) {
-      return {
-        success: false,
-        error: "La mesa ya tiene una solicitud activa para este evento",
-        code: "TABLE_ALREADY_REQUESTED",
-      };
-    }
-
-    return { success: true };
-  }
-}
-
-class RejectedGuestValidationStrategy implements ValidationStrategy {
-  async validate(data: {
-    eventId: string;
-    identityCards: string[];
-  }): Promise<ActionResult<void>> {
-    const rejectedRequests = await db.request.findMany({
-      where: {
-        eventId: data.eventId,
-        status: "REJECTED",
-      },
-      include: {
-        client: true,
-        guestInvitations: {
-          include: {
-            guest: true,
-          },
-        },
-      },
-    });
-
-    const rejectedIdentityCards = new Set<string>();
-
-    for (const request of rejectedRequests) {
-      rejectedIdentityCards.add(request.client.identityCard);
-      for (const invitation of request.guestInvitations) {
-        rejectedIdentityCards.add(invitation.guest.identityCard);
+    if (table.sector.requiresGuestList && dto.guestList) {
+      for (const guestData of dto.guestList) {
+        const guest = await GuestHelper.findOrCreateGuest(guestData);
+        guestIds.push(guest.id);
       }
     }
 
-    const foundRejected = data.identityCards.filter((ic) =>
-      rejectedIdentityCards.has(ic)
-    );
-
-    if (foundRejected.length > 0) {
-      return {
-        success: false,
-        error: `Los siguientes carnets están en solicitudes rechazadas: ${foundRejected.join(
-          ", "
-        )}`,
-        code: "GUEST_IN_REJECTED_REQUEST",
-      };
-    }
-
-    return { success: true };
-  }
-}
-
-class TermsAcceptedValidationStrategy implements ValidationStrategy {
-  async validate(termsAccepted: boolean): Promise<ActionResult<void>> {
-    if (!termsAccepted) {
-      return {
-        success: false,
-        error: "Debe aceptar los términos y condiciones",
-        code: "TERMS_NOT_ACCEPTED",
-      };
-    }
-
-    return { success: true };
-  }
-}
-
-class RequestRepository {
-  async create(data: CreateRequestDTO): Promise<RequestWithRelations> {
-    const client = await GuestHelper.findOrCreateGuest(data.clientData);
-
-    const guestIds: string[] = [];
-    for (const guestData of data.guestList) {
-      const guest = await GuestHelper.findOrCreateGuest(guestData);
-      guestIds.push(guest.id);
-    }
-
-    const result = await db.request.create({
+    return db.request.create({
       data: {
         id: crypto.randomUUID(),
-        eventId: data.eventId,
-        tableId: data.tableId,
-        packageId: data.packageId,
+        eventId: dto.eventId,
+        tableId: dto.tableId,
+        packageId: dto.packageId,
         clientId: client.id,
-        createdById: data.createdById,
-        hasConsumption: data.hasConsumption,
-        extraGuests: data.extraGuests,
-        termsAccepted: data.termsAccepted,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdById: dto.createdById,
+        hasConsumption: dto.hasConsumption,
+        extraGuests: dto.extraGuests,
+        termsAccepted: dto.termsAccepted,
         guestInvitations: {
           create: guestIds.map((guestId) => ({
             id: crypto.randomUUID(),
             guestId,
-            createdAt: new Date(),
           })),
         },
       },
+      include: this.getInclude(),
+    });
+  }
+
+  async update(dto: UpdateRequestDTO) {
+    const request = await db.request.findUnique({
+      where: { id: dto.id },
       include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: {
-          select: {
-            id: true,
-            name: true,
-            includedPeople: true,
-            basePrice: true,
-            extraPersonPrice: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            identityCard: true,
-            phone: true,
-            email: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: {
-              select: {
-                id: true,
-                name: true,
-                identityCard: true,
-              },
-            },
-          },
-        },
+        table: { include: { sector: true } },
+        guestInvitations: true,
       },
     });
 
-    return convertDecimalsToNumbers(result) as RequestWithRelations;
-  }
+    if (!request) throw new Error("Solicitud no encontrada");
 
-  async update(
-    id: string,
-    data: UpdateRequestDTO
-  ): Promise<RequestWithRelations> {
-    let clientId: string | undefined;
+    const client = await GuestHelper.findOrCreateGuest(dto.clientData);
 
-    if (data.clientData) {
-      const client = await GuestHelper.findOrCreateGuest(data.clientData);
-      clientId = client.id;
-    }
-
-    if (data.guestList) {
+    if (request.table.sector.requiresGuestList && dto.guestList) {
       await db.guestInvitation.deleteMany({
-        where: { requestId: id },
+        where: { requestId: dto.id },
       });
 
-      const guestIds: string[] = [];
-      for (const guestData of data.guestList) {
+      for (const guestData of dto.guestList) {
         const guest = await GuestHelper.findOrCreateGuest(guestData);
-        guestIds.push(guest.id);
+        await db.guestInvitation.create({
+          data: {
+            id: crypto.randomUUID(),
+            requestId: dto.id,
+            guestId: guest.id,
+          },
+        });
       }
-
-      await db.guestInvitation.createMany({
-        data: guestIds.map((guestId) => ({
-          id: crypto.randomUUID(),
-          requestId: id,
-          guestId,
-          createdAt: new Date(),
-        })),
-      });
     }
 
-    const result = await db.request.update({
-      where: { id },
+    return db.request.update({
+      where: { id: dto.id },
       data: {
-        ...(clientId && { clientId }),
-        ...(data.hasConsumption !== undefined && {
-          hasConsumption: data.hasConsumption,
-        }),
-        ...(data.extraGuests !== undefined && {
-          extraGuests: data.extraGuests,
-        }),
+        clientId: client.id,
+        hasConsumption: dto.hasConsumption,
+        extraGuests: dto.extraGuests,
         updatedAt: new Date(),
       },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: {
-          select: {
-            id: true,
-            name: true,
-            includedPeople: true,
-            basePrice: true,
-            extraPersonPrice: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            identityCard: true,
-            phone: true,
-            email: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: {
-              select: {
-                id: true,
-                name: true,
-                identityCard: true,
-              },
-            },
-          },
-        },
-      },
+      include: this.getInclude(),
     });
-
-    return convertDecimalsToNumbers(result) as RequestWithRelations;
   }
 
-  async approve(
+  async updateStatus(
     id: string,
-    approvedById: string
-  ): Promise<{ request: RequestWithRelations; qrPDFContent: string }> {
-    const createdRequest = await db.request.findUnique({ where: { id } });
-
-    if (!createdRequest) {
-      throw new Error("Solicitud no encontrada");
-    }
-
-    const result = await db.request.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-        approvedById,
-        approvedAt: new Date(),
-        reviewDuration: Math.floor(
-          (Date.now() - new Date(createdRequest.createdAt).getTime()) / 1000
-        ),
-        updatedAt: new Date(),
-      },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: true,
-        client: true,
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: true,
-          },
-        },
-      },
-    });
-
-    const allGuestIds = [
-      result.clientId,
-      ...result.guestInvitations.map((gi) => gi.guest.id),
-    ];
-
-    await GuestHelper.incrementEventsAttended(allGuestIds);
-
-    const qrEntries = await QRGenerator.createQREntries(id, allGuestIds, {
-      name: result.event.name,
-      eventDate: result.event.eventDate,
-      tableName: result.table.name,
-      sectorName: result.table.sector.name,
-    });
-
-    const qrPDFContent = await QRGenerator.generateQRPDFContent(qrEntries);
-
-    return {
-      request: convertDecimalsToNumbers(result) as RequestWithRelations,
-      qrPDFContent,
-    };
-  }
-
-  async observe(
-    id: string,
+    status: string,
     approvedById: string,
-    notes: string
-  ): Promise<RequestWithRelations> {
-    const createdRequest = await db.request.findUnique({ where: { id } });
+    notes?: string,
+  ) {
+    const request = await db.request.findUnique({ where: { id } });
+    if (!request) throw new Error("Solicitud no encontrada");
 
-    if (!createdRequest) {
-      throw new Error("Solicitud no encontrada");
-    }
+    const reviewDuration = Math.floor(
+      (Date.now() - new Date(request.createdAt).getTime()) / 1000,
+    );
 
-    const result = await db.request.update({
+    return db.request.update({
       where: { id },
       data: {
-        status: "OBSERVED",
+        status,
         approvedById,
         managerNotes: notes,
-        reviewDuration: Math.floor(
-          (Date.now() - new Date(createdRequest.createdAt).getTime()) / 1000
-        ),
+        reviewDuration,
+        ...(status === "PRE_APPROVED" && {
+          isPreApproved: true,
+          preApprovedAt: new Date(),
+        }),
+        ...(status === "APPROVED" && { approvedAt: new Date() }),
         updatedAt: new Date(),
       },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: {
-          select: {
-            id: true,
-            name: true,
-            includedPeople: true,
-            basePrice: true,
-            extraPersonPrice: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            identityCard: true,
-            phone: true,
-            email: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: {
-              select: {
-                id: true,
-                name: true,
-                identityCard: true,
-              },
-            },
-          },
-        },
-      },
+      include: this.getInclude(),
     });
-
-    return convertDecimalsToNumbers(result) as RequestWithRelations;
   }
 
-  async reject(
-    id: string,
-    approvedById: string,
-    notes: string
-  ): Promise<RequestWithRelations> {
-    const createdRequest = await db.request.findUnique({ where: { id } });
-
-    if (!createdRequest) {
-      throw new Error("Solicitud no encontrada");
-    }
-
-    const result = await db.request.update({
+  async markAsPaid(id: string) {
+    return db.request.update({
       where: { id },
       data: {
-        status: "REJECTED",
-        approvedById,
-        managerNotes: notes,
-        reviewDuration: Math.floor(
-          (Date.now() - new Date(createdRequest.createdAt).getTime()) / 1000
-        ),
+        isPaid: true,
+        paidAt: new Date(),
         updatedAt: new Date(),
       },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: {
-          select: {
-            id: true,
-            name: true,
-            includedPeople: true,
-            basePrice: true,
-            extraPersonPrice: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            identityCard: true,
-            phone: true,
-            email: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: {
-              select: {
-                id: true,
-                name: true,
-                identityCard: true,
-              },
-            },
-          },
-        },
-      },
+      include: this.getInclude(),
     });
-
-    return convertDecimalsToNumbers(result) as RequestWithRelations;
   }
 
-  async findById(id: string): Promise<RequestWithRelations | null> {
-    const result = await db.request.findUnique({
+  async findById(id: string) {
+    return db.request.findUnique({
       where: { id },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            eventDate: true,
-            image: true,
-          },
-        },
-        table: {
-          select: {
-            id: true,
-            name: true,
-            sector: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-        package: {
-          select: {
-            id: true,
-            name: true,
-            includedPeople: true,
-            basePrice: true,
-            extraPersonPrice: true,
-          },
-        },
-        client: {
-          select: {
-            id: true,
-            name: true,
-            identityCard: true,
-            phone: true,
-            email: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        approvedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        guestInvitations: {
-          include: {
-            guest: {
-              select: {
-                id: true,
-                name: true,
-                identityCard: true,
-              },
-            },
-          },
-        },
-      },
+      include: this.getInclude(),
     });
-
-    if (!result) return null;
-    return convertDecimalsToNumbers(result) as RequestWithRelations;
   }
 
-  async findMany(
-    filters: RequestFilters,
-    pagination: PaginationParams
-  ): Promise<PaginatedResult<RequestWithRelations>> {
+  async findMany(filters: RequestFilters, pagination: PaginationParams) {
     const {
       page = 1,
       pageSize = 10,
@@ -698,19 +164,7 @@ class RequestRepository {
     } = pagination;
     const skip = (page - 1) * pageSize;
 
-    const where: {
-      status?: string;
-      eventId?: string;
-      createdById?: string;
-      createdAt?: { gte?: Date; lte?: Date };
-      OR?: Array<{
-        client?: {
-          name?: { contains: string; mode: "insensitive" };
-          identityCard?: { contains: string; mode: "insensitive" };
-        };
-        event?: { name?: { contains: string; mode: "insensitive" } };
-      }>;
-    } = {
+    const where: Record<string, unknown> = {
       ...(filters.status && { status: filters.status }),
       ...(filters.eventId && { eventId: filters.eventId }),
       ...(filters.createdById && { createdById: filters.createdById }),
@@ -718,19 +172,10 @@ class RequestRepository {
 
     if (filters.search) {
       where.OR = [
-        {
-          client: {
-            name: { contains: filters.search, mode: "insensitive" },
-          },
-        },
+        { client: { name: { contains: filters.search, mode: "insensitive" } } },
         {
           client: {
             identityCard: { contains: filters.search, mode: "insensitive" },
-          },
-        },
-        {
-          event: {
-            name: { contains: filters.search, mode: "insensitive" },
           },
         },
       ];
@@ -738,12 +183,10 @@ class RequestRepository {
 
     if (filters.dateFrom || filters.dateTo) {
       where.createdAt = {};
-      if (filters.dateFrom) {
-        where.createdAt.gte = filters.dateFrom;
-      }
-      if (filters.dateTo) {
-        where.createdAt.lte = filters.dateTo;
-      }
+      if (filters.dateFrom)
+        (where.createdAt as Record<string, Date>).gte = filters.dateFrom;
+      if (filters.dateTo)
+        (where.createdAt as Record<string, Date>).lte = filters.dateTo;
     }
 
     const [data, total] = await Promise.all([
@@ -752,80 +195,15 @@ class RequestRepository {
         skip,
         take: pageSize,
         orderBy: { [sortBy]: sortOrder },
-        include: {
-          event: {
-            select: {
-              id: true,
-              name: true,
-              eventDate: true,
-              image: true,
-            },
-          },
-          table: {
-            select: {
-              id: true,
-              name: true,
-              sector: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          package: {
-            select: {
-              id: true,
-              name: true,
-              includedPeople: true,
-              basePrice: true,
-              extraPersonPrice: true,
-            },
-          },
-          client: {
-            select: {
-              id: true,
-              name: true,
-              identityCard: true,
-              phone: true,
-              email: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          approvedBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          guestInvitations: {
-            include: {
-              guest: {
-                select: {
-                  id: true,
-                  name: true,
-                  identityCard: true,
-                },
-              },
-            },
-          },
-        },
+        include: this.getInclude(),
       }),
       db.request.count({ where }),
     ]);
 
-    const convertedData = data.map((item) =>
-      convertDecimalsToNumbers(item)
-    ) as RequestWithRelations[];
-
     return {
-      data: convertedData,
+      data: data.map((item) =>
+        convertDecimalsToNumbers(item),
+      ) as RequestWithRelations[],
       total,
       page,
       pageSize,
@@ -833,94 +211,93 @@ class RequestRepository {
     };
   }
 
-  async getAvailableTablesForEvent(eventId: string): Promise<
-    Array<{
-      id: string;
-      name: string;
-      sectorId: string;
-      sectorName: string;
-    }>
-  > {
-    const eventTables = await db.eventTable.findMany({
-      where: { eventId },
-      include: {
-        table: {
-          include: {
-            sector: true,
+  private getInclude() {
+    return {
+      event: {
+        select: {
+          id: true,
+          name: true,
+          eventDate: true,
+          image: true,
+          freeInvitationQRCount: true,
+          paymentQR: true,
+        },
+      },
+      table: {
+        select: {
+          id: true,
+          name: true,
+          sector: {
+            select: {
+              id: true,
+              name: true,
+              requiresGuestList: true,
+            },
           },
         },
       },
-    });
-
-    const activeRequestTableIds = await db.request.findMany({
-      where: {
-        eventId,
-        status: { in: ["PENDING", "OBSERVED", "APPROVED"] },
+      package: true,
+      client: true,
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
       },
-      select: { tableId: true },
-    });
-
-    const bookedTableIds = new Set(activeRequestTableIds.map((r) => r.tableId));
-
-    return eventTables
-      .filter((et) => !bookedTableIds.has(et.tableId))
-      .map((et) => ({
-        id: et.table.id,
-        name: et.table.name,
-        sectorId: et.table.sector.id,
-        sectorName: et.table.sector.name,
-      }));
+      approvedBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      guestInvitations: {
+        include: {
+          guest: true,
+        },
+      },
+    };
   }
 }
 
 class RequestService {
   private repository = new RequestRepository();
-  private tableValidation = new TableAvailabilityValidationStrategy();
-  private rejectedGuestValidation = new RejectedGuestValidationStrategy();
-  private termsValidation = new TermsAcceptedValidationStrategy();
 
   async createRequest(
-    dto: CreateRequestDTO
+    dto: CreateRequestDTO,
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
-      const termsValidation = await this.termsValidation.validate(
-        dto.termsAccepted
-      );
-
-      if (!termsValidation.success) {
-        return termsValidation as ActionResult<RequestWithRelations>;
+      if (!dto.termsAccepted) {
+        return {
+          success: false,
+          error: "Debe aceptar los términos y condiciones",
+          code: "TERMS_NOT_ACCEPTED",
+        };
       }
 
-      const tableValidation = await this.tableValidation.validate({
-        tableId: dto.tableId,
-        eventId: dto.eventId,
+      const existingRequest = await db.request.findFirst({
+        where: {
+          eventId: dto.eventId,
+          tableId: dto.tableId,
+          status: { in: ["PENDING", "OBSERVED", "PRE_APPROVED", "APPROVED"] },
+        },
       });
 
-      if (!tableValidation.success) {
-        return tableValidation as ActionResult<RequestWithRelations>;
-      }
-
-      const allIdentityCards = [
-        dto.clientData.identityCard,
-        ...dto.guestList.map((g) => g.identityCard),
-      ];
-
-      const rejectedValidation = await this.rejectedGuestValidation.validate({
-        eventId: dto.eventId,
-        identityCards: allIdentityCards,
-      });
-
-      if (!rejectedValidation.success) {
-        return rejectedValidation as ActionResult<RequestWithRelations>;
+      if (existingRequest) {
+        return {
+          success: false,
+          error: "La mesa ya tiene una solicitud activa",
+          code: "TABLE_ALREADY_REQUESTED",
+        };
       }
 
       const request = await this.repository.create(dto);
-
       revalidatePath("/requests");
 
       return {
         success: true,
-        data: request,
+        data: convertDecimalsToNumbers(request) as RequestWithRelations,
       };
     } catch (error) {
       return {
@@ -933,20 +310,11 @@ class RequestService {
   }
 
   async updateRequest(
-    dto: UpdateRequestDTO
+    dto: UpdateRequestDTO,
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
       const request = await this.repository.findById(dto.id);
-
-      if (!request) {
-        return {
-          success: false,
-          error: "Solicitud no encontrada",
-          code: "NOT_FOUND",
-        };
-      }
-
-      if (request.status !== "PENDING" && request.status !== "OBSERVED") {
+      if (!request || !["PENDING", "OBSERVED"].includes(request.status)) {
         return {
           success: false,
           error: "Solo se pueden editar solicitudes pendientes u observadas",
@@ -954,29 +322,12 @@ class RequestService {
         };
       }
 
-      if (dto.guestList) {
-        const allIdentityCards = [
-          dto.clientData?.identityCard ?? request.client.identityCard,
-          ...dto.guestList.map((g) => g.identityCard),
-        ];
-
-        const rejectedValidation = await this.rejectedGuestValidation.validate({
-          eventId: request.eventId,
-          identityCards: allIdentityCards,
-        });
-
-        if (!rejectedValidation.success) {
-          return rejectedValidation as ActionResult<RequestWithRelations>;
-        }
-      }
-
-      const updatedRequest = await this.repository.update(dto.id, dto);
-
+      const updated = await this.repository.update(dto);
       revalidatePath("/requests");
 
       return {
         success: true,
-        data: updatedRequest,
+        data: convertDecimalsToNumbers(updated) as RequestWithRelations,
       };
     } catch (error) {
       return {
@@ -990,14 +341,88 @@ class RequestService {
     }
   }
 
-  async approveRequest(
-    dto: ApproveRequestDTO
+  async preApproveRequest(
+    dto: PreApproveRequestDTO,
   ): Promise<
-    ActionResult<{ request: RequestWithRelations; qrPDFContent: string }>
+    ActionResult<{ request: RequestWithRelations; paymentQRUrl: string | null }>
   > {
     try {
       const request = await this.repository.findById(dto.id);
+      if (!request || !["PENDING", "OBSERVED"].includes(request.status)) {
+        return {
+          success: false,
+          error: "Solicitud no válida para pre-aprobar",
+          code: "INVALID_STATUS",
+        };
+      }
 
+      const updated = await this.repository.updateStatus(
+        dto.id,
+        "PRE_APPROVED",
+        dto.approvedById,
+      );
+
+      revalidatePath("/requests");
+
+      return {
+        success: true,
+        data: {
+          request: convertDecimalsToNumbers(updated) as RequestWithRelations,
+          paymentQRUrl: updated.event.paymentQR
+            ? `/uploads/${updated.event.paymentQR}`
+            : null,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Error al pre-aprobar",
+        code: "PRE_APPROVE_ERROR",
+      };
+    }
+  }
+
+  async markAsPaid(
+    dto: MarkAsPaidDTO,
+  ): Promise<ActionResult<RequestWithRelations>> {
+    try {
+      const request = await this.repository.findById(dto.id);
+      if (!request || request.status !== "PRE_APPROVED") {
+        return {
+          success: false,
+          error: "Solo se pueden marcar como pagadas solicitudes pre-aprobadas",
+          code: "INVALID_STATUS",
+        };
+      }
+
+      const updated = await this.repository.markAsPaid(dto.id);
+      revalidatePath("/requests");
+
+      return {
+        success: true,
+        data: convertDecimalsToNumbers(updated) as RequestWithRelations,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al marcar como pagada",
+        code: "MARK_PAID_ERROR",
+      };
+    }
+  }
+
+  async approveRequest(dto: ApproveRequestDTO): Promise<
+    ActionResult<{
+      request: RequestWithRelations;
+      qrPDFContent: string;
+      freeQRPDFContent: string | null;
+    }>
+  > {
+    try {
+      const request = await this.repository.findById(dto.id);
       if (!request) {
         return {
           success: false,
@@ -1006,130 +431,180 @@ class RequestService {
         };
       }
 
-      if (request.status !== "PENDING" && request.status !== "OBSERVED") {
+      if (request.status === "PRE_APPROVED" && !request.isPaid) {
         return {
           success: false,
-          error: "Solo se pueden aprobar solicitudes pendientes u observadas",
+          error: "Debe marcar como pagada antes de aprobar",
+          code: "NOT_PAID",
+        };
+      }
+
+      if (!["PENDING", "OBSERVED", "PRE_APPROVED"].includes(request.status)) {
+        return {
+          success: false,
+          error: "Estado inválido",
           code: "INVALID_STATUS",
         };
       }
 
-      const result = await this.repository.approve(dto.id, dto.approvedById);
+      const updated = await this.repository.updateStatus(
+        dto.id,
+        "APPROVED",
+        dto.approvedById,
+      );
+
+      const requiresGuestList = updated.table.sector.requiresGuestList;
+      const totalPeople = updated.package.includedPeople + updated.extraGuests;
+
+      let qrPDFContent: string;
+      let freeQRPDFContent: string | null = null;
+
+      if (requiresGuestList) {
+        const allGuestIds = [
+          updated.clientId,
+          ...updated.guestInvitations.map((gi) => gi.guest.id),
+        ];
+
+        await GuestHelper.incrementEventsAttended(allGuestIds);
+
+        const qrEntries = await QRGenerator.createQREntries(
+          dto.id,
+          allGuestIds,
+          {
+            name: updated.event.name,
+            eventDate: updated.event.eventDate,
+            tableName: updated.table.name,
+            sectorName: updated.table.sector.name,
+          },
+        );
+
+        qrPDFContent = await QRGenerator.generateQRPDFContent(qrEntries);
+      } else {
+        const anonymousQRs = await QRGenerator.createAnonymousQREntries(
+          dto.id,
+          totalPeople,
+          {
+            name: updated.event.name,
+            eventDate: updated.event.eventDate,
+            tableName: updated.table.name,
+            sectorName: updated.table.sector.name,
+          },
+        );
+
+        qrPDFContent =
+          await QRGenerator.generateAnonymousQRPDFContent(anonymousQRs);
+      }
+
+      if (updated.event.freeInvitationQRCount > 0) {
+        const freeQRs = await QRGenerator.createAnonymousQREntries(
+          dto.id,
+          updated.event.freeInvitationQRCount,
+          {
+            name: updated.event.name,
+            eventDate: updated.event.eventDate,
+            tableName: updated.table.name,
+            sectorName: updated.table.sector.name,
+          },
+        );
+
+        freeQRPDFContent = await QRGenerator.generateFreeQRPDFContent(freeQRs);
+      }
 
       revalidatePath("/requests");
 
       return {
         success: true,
-        data: result,
+        data: {
+          request: convertDecimalsToNumbers(updated) as RequestWithRelations,
+          qrPDFContent,
+          freeQRPDFContent,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Error al aprobar solicitud",
+        error: error instanceof Error ? error.message : "Error al aprobar",
         code: "APPROVE_ERROR",
       };
     }
   }
 
   async observeRequest(
-    dto: ObserveRequestDTO
+    dto: ObserveRequestDTO,
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
       const request = await this.repository.findById(dto.id);
-
-      if (!request) {
+      if (!request || request.status !== "PENDING") {
         return {
           success: false,
-          error: "Solicitud no encontrada",
-          code: "NOT_FOUND",
-        };
-      }
-
-      if (request.status !== "PENDING") {
-        return {
-          success: false,
-          error: "Solo se pueden observar solicitudes pendientes",
+          error: "Estado inválido",
           code: "INVALID_STATUS",
         };
       }
 
-      const observedRequest = await this.repository.observe(
+      const updated = await this.repository.updateStatus(
         dto.id,
+        "OBSERVED",
         dto.approvedById,
-        dto.managerNotes
+        dto.managerNotes,
       );
 
       revalidatePath("/requests");
-
       return {
         success: true,
-        data: observedRequest,
+        data: convertDecimalsToNumbers(updated) as RequestWithRelations,
       };
     } catch (error) {
       return {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Error al observar solicitud",
+        error: error instanceof Error ? error.message : "Error al observar",
         code: "OBSERVE_ERROR",
       };
     }
   }
 
   async rejectRequest(
-    dto: RejectRequestDTO
+    dto: RejectRequestDTO,
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
       const request = await this.repository.findById(dto.id);
-
-      if (!request) {
+      if (
+        !request ||
+        !["PENDING", "OBSERVED", "PRE_APPROVED"].includes(request.status)
+      ) {
         return {
           success: false,
-          error: "Solicitud no encontrada",
-          code: "NOT_FOUND",
-        };
-      }
-
-      if (request.status !== "PENDING" && request.status !== "OBSERVED") {
-        return {
-          success: false,
-          error: "Solo se pueden rechazar solicitudes pendientes u observadas",
+          error: "Estado inválido",
           code: "INVALID_STATUS",
         };
       }
 
-      const rejectedRequest = await this.repository.reject(
+      const updated = await this.repository.updateStatus(
         dto.id,
+        "REJECTED",
         dto.approvedById,
-        dto.managerNotes
+        dto.managerNotes,
       );
 
       revalidatePath("/requests");
-
       return {
         success: true,
-        data: rejectedRequest,
+        data: convertDecimalsToNumbers(updated) as RequestWithRelations,
       };
     } catch (error) {
       return {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Error al rechazar solicitud",
+        error: error instanceof Error ? error.message : "Error al rechazar",
         code: "REJECT_ERROR",
       };
     }
   }
 
   async getRequestById(
-    id: string
+    id: string,
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
       const request = await this.repository.findById(id);
-
       if (!request) {
         return {
           success: false,
@@ -1140,7 +615,7 @@ class RequestService {
 
       return {
         success: true,
-        data: request,
+        data: convertDecimalsToNumbers(request) as RequestWithRelations,
       };
     } catch (error) {
       return {
@@ -1154,15 +629,11 @@ class RequestService {
 
   async getRequests(
     filters: RequestFilters = {},
-    pagination: PaginationParams = {}
+    pagination: PaginationParams = {},
   ): Promise<ActionResult<PaginatedResult<RequestWithRelations>>> {
     try {
       const result = await this.repository.findMany(filters, pagination);
-
-      return {
-        success: true,
-        data: result,
-      };
+      return { success: true, data: result };
     } catch (error) {
       return {
         success: false,
@@ -1175,77 +646,106 @@ class RequestService {
     }
   }
 
-  async downloadRequestQRs(
-    requestId: string
-  ): Promise<ActionResult<{ qrPDFContent: string; fileName: string }>> {
+  async downloadRequestQRs(requestId: string): Promise<
+    ActionResult<{
+      qrPDFContent: string;
+      freeQRPDFContent: string | null;
+      fileName: string;
+    }>
+  > {
     try {
       const request = await db.request.findUnique({
         where: { id: requestId },
         include: {
-          event: {
-            select: {
-              name: true,
-              eventDate: true,
-            },
-          },
-          table: {
-            select: {
-              name: true,
-              sector: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
+          event: true,
+          table: { include: { sector: true } },
+          package: true,
           client: true,
-          guestInvitations: {
-            include: {
-              guest: true,
-            },
-          },
+          guestInvitations: { include: { guest: true } },
         },
       });
 
       if (!request || request.status !== "APPROVED") {
         return {
           success: false,
-          error: "Solicitud no encontrada o no está aprobada",
+          error: "Solicitud no encontrada o no aprobada",
           code: "NOT_APPROVED",
         };
       }
 
       const qrEntries = await db.qREntry.findMany({
         where: { requestId },
-        include: {
-          guest: true,
-        },
+        include: { guest: true },
       });
 
-      if (!qrEntries || qrEntries.length === 0) {
+      if (!qrEntries.length) {
         return {
           success: false,
-          error: "No se encontraron códigos QR para esta solicitud",
+          error: "No se encontraron códigos QR",
           code: "NO_QR_FOUND",
         };
       }
 
-      const qrData = qrEntries.map((qr) => ({
-        code: qr.code,
-        guestName: qr.guest.name,
-        guestIdentityCard: qr.guest.identityCard,
-        eventName: request.event.name,
-        eventDate: request.event.eventDate,
-        tableName: request.table.name,
-        sectorName: request.table.sector.name,
-      }));
+      const requiresGuestList = request.table.sector.requiresGuestList;
+      let qrPDFContent: string;
+      let freeQRPDFContent: string | null = null;
 
-      const qrPDFContent = await QRGenerator.generateQRPDFContent(qrData);
+      if (requiresGuestList) {
+        const qrData = qrEntries
+          .filter((qr) => !qr.guest.identityCard.startsWith("TEMP-"))
+          .map((qr) => ({
+            code: qr.code,
+            guestName: qr.guest.name,
+            guestIdentityCard: qr.guest.identityCard,
+            eventName: request.event.name,
+            eventDate: request.event.eventDate,
+            tableName: request.table.name,
+            sectorName: request.table.sector.name,
+          }));
+
+        qrPDFContent = await QRGenerator.generateQRPDFContent(qrData);
+      } else {
+        const totalPeople =
+          request.package.includedPeople + request.extraGuests;
+        const anonymousQRData = qrEntries
+          .slice(0, totalPeople)
+          .map((qr, index) => ({
+            code: qr.code,
+            eventName: request.event.name,
+            eventDate: request.event.eventDate,
+            tableName: request.table.name,
+            sectorName: request.table.sector.name,
+            qrNumber: index + 1,
+            totalQRs: totalPeople,
+          }));
+
+        qrPDFContent =
+          await QRGenerator.generateAnonymousQRPDFContent(anonymousQRData);
+      }
+
+      if (request.event.freeInvitationQRCount > 0) {
+        const freeQREntries = qrEntries.slice(
+          -request.event.freeInvitationQRCount,
+        );
+        const freeQRData = freeQREntries.map((qr, index) => ({
+          code: qr.code,
+          eventName: request.event.name,
+          eventDate: request.event.eventDate,
+          tableName: request.table.name,
+          sectorName: request.table.sector.name,
+          qrNumber: index + 1,
+          totalQRs: request.event.freeInvitationQRCount,
+        }));
+
+        freeQRPDFContent =
+          await QRGenerator.generateFreeQRPDFContent(freeQRData);
+      }
 
       return {
         success: true,
         data: {
           qrPDFContent,
+          freeQRPDFContent,
           fileName: `QR-${request.event.name}-${request.client.name}`,
         },
       };
@@ -1265,20 +765,66 @@ class RequestService {
         name: string;
         sectorId: string;
         sectorName: string;
+        requiresGuestList: boolean;
       }>
     >
   > {
     try {
-      const tables = await this.repository.getAvailableTablesForEvent(eventId);
+      const eventTables = await db.eventTable.findMany({
+        where: {
+          eventId,
+          isBooked: false,
+        },
+        include: {
+          table: {
+            include: {
+              sector: {
+                select: {
+                  id: true,
+                  name: true,
+                  requiresGuestList: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const activeRequests = await db.request.findMany({
+        where: {
+          eventId,
+          status: { in: ["PENDING", "OBSERVED", "PRE_APPROVED", "APPROVED"] },
+        },
+        select: {
+          tableId: true,
+        },
+      });
+
+      const requestedTableIds = new Set(
+        activeRequests.map((req) => req.tableId),
+      );
+
+      const availableTables = eventTables
+        .filter((et) => !requestedTableIds.has(et.tableId))
+        .map((et) => ({
+          id: et.table.id,
+          name: et.table.name,
+          sectorId: et.table.sector.id,
+          sectorName: et.table.sector.name,
+          requiresGuestList: et.table.sector.requiresGuestList,
+        }));
 
       return {
         success: true,
-        data: tables,
+        data: availableTables,
       };
     } catch (error) {
       return {
         success: false,
-        error: "Error al obtener mesas disponibles",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al obtener mesas disponibles",
         code: "FETCH_ERROR",
       };
     }
@@ -1293,6 +839,14 @@ export async function createRequest(dto: CreateRequestDTO) {
 
 export async function updateRequest(dto: UpdateRequestDTO) {
   return requestService.updateRequest(dto);
+}
+
+export async function preApproveRequest(dto: PreApproveRequestDTO) {
+  return requestService.preApproveRequest(dto);
+}
+
+export async function markAsPaid(dto: MarkAsPaidDTO) {
+  return requestService.markAsPaid(dto);
 }
 
 export async function approveRequest(dto: ApproveRequestDTO) {
@@ -1313,7 +867,7 @@ export async function getRequestById(id: string) {
 
 export async function getRequests(
   filters?: RequestFilters,
-  pagination?: PaginationParams
+  pagination?: PaginationParams,
 ) {
   return requestService.getRequests(filters, pagination);
 }

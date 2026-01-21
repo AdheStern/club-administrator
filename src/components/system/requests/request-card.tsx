@@ -1,5 +1,3 @@
-// src/components/system/requests/request-card.tsx
-
 "use client";
 
 import { format } from "date-fns";
@@ -13,11 +11,13 @@ import {
   User,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,7 +25,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { downloadRequestQRs } from "@/lib/actions/request-actions";
+import { Label } from "@/components/ui/label";
+import { downloadRequestQRs, markAsPaid } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ interface RequestCardProps {
   onReject?: (request: RequestWithRelations) => void;
   canEdit?: boolean;
   canManage?: boolean;
+  onRefresh?: () => void;
 }
 
 const statusConfig = {
@@ -50,6 +52,11 @@ const statusConfig = {
     label: "Observada",
     variant: "outline" as const,
     className: "bg-orange-100 text-orange-800 border-orange-200",
+  },
+  PRE_APPROVED: {
+    label: "Pre-Aprobada",
+    variant: "default" as const,
+    className: "bg-blue-100 text-blue-800 border-blue-200",
   },
   APPROVED: {
     label: "Aprobada",
@@ -76,8 +83,10 @@ export function RequestCard({
   onReject,
   canEdit = false,
   canManage = false,
+  onRefresh,
 }: RequestCardProps) {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
 
   const statusKey = request.status as keyof typeof statusConfig;
   const status = statusConfig[statusKey] || {
@@ -88,9 +97,12 @@ export function RequestCard({
 
   const canBeEdited =
     canEdit && (request.status === "PENDING" || request.status === "OBSERVED");
+
   const canBeManaged =
     canManage &&
-    (request.status === "PENDING" || request.status === "OBSERVED");
+    (request.status === "PENDING" ||
+      request.status === "OBSERVED" ||
+      request.status === "PRE_APPROVED");
 
   const rawEventDate = request.event?.eventDate
     ? new Date(request.event.eventDate)
@@ -129,6 +141,57 @@ export function RequestCard({
       console.error("Download error:", error);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadFreeQR = async () => {
+    setIsDownloading(true);
+    try {
+      const result = await downloadRequestQRs(request.id);
+
+      if (result.success && result.data && result.data.freeQRPDFContent) {
+        const freeBlob = new Blob([result.data.freeQRPDFContent], {
+          type: "text/html",
+        });
+        const freeUrl = URL.createObjectURL(freeBlob);
+        const freeLink = document.createElement("a");
+        freeLink.href = freeUrl;
+        freeLink.download = `${result.data.fileName}-GRATIS.html`;
+        document.body.appendChild(freeLink);
+        freeLink.click();
+        document.body.removeChild(freeLink);
+        URL.revokeObjectURL(freeUrl);
+
+        toast.success("QR de invitado descargado correctamente");
+      } else {
+        toast.error("No hay QR de invitado disponible");
+      }
+    } catch (error) {
+      toast.error("Error al descargar QR de invitado");
+      console.error("Download free QR error:", error);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (checked: boolean) => {
+    if (!checked) return;
+
+    setIsMarkingPaid(true);
+    try {
+      const result = await markAsPaid({ id: request.id });
+
+      if (result.success) {
+        toast.success("Solicitud marcada como pagada");
+        onRefresh?.();
+      } else {
+        toast.error(result.error || "Error al marcar como pagada");
+      }
+    } catch (error) {
+      toast.error("Error al marcar como pagada");
+      console.error("Mark paid error:", error);
+    } finally {
+      setIsMarkingPaid(false);
     }
   };
 
@@ -178,30 +241,51 @@ export function RequestCard({
             {canBeManaged && (
               <>
                 <DropdownMenuSeparator />
-                {onApprove && (
+                {onApprove &&
+                  (request.status === "PENDING" ||
+                    request.status === "OBSERVED") && (
+                    <DropdownMenuItem
+                      onClick={() => onApprove(request)}
+                      className="text-green-600 focus:text-green-600"
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Pre-Aprobar
+                    </DropdownMenuItem>
+                  )}
+                {onApprove && request.status === "PRE_APPROVED" && (
                   <DropdownMenuItem
                     onClick={() => onApprove(request)}
-                    className="text-green-600 focus:text-green-600"
+                    disabled={!request.isPaid}
+                    className={cn(
+                      request.isPaid
+                        ? "text-green-600 focus:text-green-600"
+                        : "opacity-50 cursor-not-allowed",
+                    )}
                   >
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Aprobar
+                    {request.isPaid
+                      ? "Aprobar Final"
+                      : "Aprobar (marcar como pagado primero)"}
                   </DropdownMenuItem>
                 )}
-                {onObserve && (
+                {onObserve && request.status === "PENDING" && (
                   <DropdownMenuItem onClick={() => onObserve(request)}>
                     <Clock className="mr-2 h-4 w-4" />
                     Observar
                   </DropdownMenuItem>
                 )}
-                {onReject && (
-                  <DropdownMenuItem
-                    onClick={() => onReject(request)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Rechazar
-                  </DropdownMenuItem>
-                )}
+                {onReject &&
+                  (request.status === "PENDING" ||
+                    request.status === "OBSERVED" ||
+                    request.status === "PRE_APPROVED") && (
+                    <DropdownMenuItem
+                      onClick={() => onReject(request)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Rechazar
+                    </DropdownMenuItem>
+                  )}
               </>
             )}
           </DropdownMenuContent>
@@ -253,8 +337,43 @@ export function RequestCard({
           </div>
         )}
 
+        {request.status === "PRE_APPROVED" && request.event.paymentQR && (
+          <div className="pt-2 border-t space-y-3">
+            <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+              <p className="text-sm font-semibold text-blue-900">QR de Pago</p>
+              <div className="relative w-full aspect-square max-w-[200px] mx-auto">
+                <Image
+                  src={`/uploads/${request.event.paymentQR}`}
+                  alt="QR de Pago"
+                  fill
+                  className="object-contain rounded-lg"
+                />
+              </div>
+            </div>
+
+            {canManage && (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id={`paid-${request.id}`}
+                  checked={request.isPaid}
+                  onCheckedChange={handleMarkAsPaid}
+                  disabled={isMarkingPaid || request.isPaid}
+                />
+                <Label
+                  htmlFor={`paid-${request.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {request.isPaid
+                    ? "✓ Marcado como pagado"
+                    : "Marcar como pagado"}
+                </Label>
+              </div>
+            )}
+          </div>
+        )}
+
         {request.status === "APPROVED" && (
-          <div className="pt-2 border-t">
+          <div className="pt-2 border-t space-y-2">
             <Button
               variant="outline"
               size="sm"
@@ -265,11 +384,31 @@ export function RequestCard({
               <Download className="mr-2 h-4 w-4" />
               {isDownloading ? "Descargando..." : "Descargar Códigos QR"}
             </Button>
+
+            {request.event.freeInvitationQRCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full border-green-200 text-green-700 hover:bg-green-50"
+                onClick={handleDownloadFreeQR}
+                disabled={isDownloading}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {isDownloading
+                  ? "Descargando..."
+                  : `Descargar QR de Invitado (${request.event.freeInvitationQRCount})`}
+              </Button>
+            )}
           </div>
         )}
 
-        <div className="pt-2 border-t text-xs text-muted-foreground">
-          <p>Creado por: {request.createdBy?.name || "Sistema"}</p>
+        <div className="pt-2 border-t space-y-1 text-xs text-muted-foreground">
+          <p className="font-medium">
+            Solicitante: {request.createdBy?.name || "Sistema"}
+          </p>
+          {request.createdBy?.phone && (
+            <p>Teléfono: {request.createdBy.phone}</p>
+          )}
           <p>
             {format(createdAt, "dd/MM/yyyy HH:mm", {
               locale: es,
