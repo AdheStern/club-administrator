@@ -1,5 +1,3 @@
-// src/components/auth/sign-out-button.tsx
-
 "use client";
 
 import { LogOutIcon } from "lucide-react";
@@ -14,23 +12,23 @@ export function SignOutButton() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignOut = async () => {
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-      await authClient.signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            toast.success("Sesión cerrada correctamente");
-            router.push("/sign-in");
-          },
-          onError: (ctx) => {
-            toast.error(ctx.error.message || "Error al cerrar sesión");
-            setIsLoading(false);
-          },
-        },
-      });
+      const { error } = await authClient.signOut();
+
+      if (error) {
+        toast.error(error.message || "Error al cerrar sesión");
+        return;
+      }
+
+      toast.success("Sesión cerrada correctamente");
+      router.push("/sign-in");
+      router.refresh();
     } catch (error) {
       console.error("Error signing out:", error);
       toast.error("Error al cerrar sesión");
+    } finally {
       setIsLoading(false);
     }
   };
