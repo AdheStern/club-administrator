@@ -1,5 +1,4 @@
 // src/components/system/events/event-list.tsx
-
 "use client";
 
 import { Filter, Plus, Search } from "lucide-react";
@@ -17,7 +16,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { deleteEvent, toggleEventStatus } from "@/lib/actions/event-actions";
-import type { EventWithRelations } from "@/lib/actions/types/event-types";
+import { convertDecimalsToNumbers } from "@/lib/actions/helpers/decimal-converter";
+import type {
+  EventWithRelations,
+  EventWithRelationsDTO,
+} from "@/lib/actions/types/event-types";
 import type { SectorWithRelations } from "@/lib/actions/types/sector-types";
 import type { TableWithRelations } from "@/lib/actions/types/table-types";
 import { EventCard } from "./event-card";
@@ -30,6 +33,23 @@ interface EventListProps {
   onRefresh: () => void;
 }
 
+function convertEventToDTO(event: EventWithRelations): EventWithRelationsDTO {
+  return {
+    ...event,
+    commissionAmount: event.commissionAmount
+      ? Number(event.commissionAmount)
+      : null,
+    eventSectors: event.eventSectors.map((es) => ({
+      ...es,
+      sector: es.sector,
+    })),
+    eventTables: event.eventTables.map((et) => ({
+      ...et,
+      table: et.table,
+    })),
+  };
+}
+
 export function EventList({
   initialEvents,
   sectors,
@@ -39,16 +59,16 @@ export function EventList({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<string>("all");
-  const [selectedEvent, setSelectedEvent] = useState<EventWithRelations | null>(
-    null
-  );
+  const [selectedEvent, setSelectedEvent] =
+    useState<EventWithRelationsDTO | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [eventToDelete, setEventToDelete] = useState<EventWithRelations | null>(
-    null
-  );
+  const [eventToDelete, setEventToDelete] =
+    useState<EventWithRelationsDTO | null>(null);
 
-  const filteredEvents = initialEvents.filter((event) => {
+  const eventsDTO = initialEvents.map(convertEventToDTO);
+
+  const filteredEvents = eventsDTO.filter((event) => {
     const matchesSearch =
       event.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -69,24 +89,24 @@ export function EventList({
     return matchesSearch && matchesStatus && matchesTime;
   });
 
-  const handleEdit = (event: EventWithRelations) => {
+  const handleEdit = (event: EventWithRelationsDTO) => {
     setSelectedEvent(event);
     setIsFormOpen(true);
   };
 
-  const handleDelete = (event: EventWithRelations) => {
+  const handleDelete = (event: EventWithRelationsDTO) => {
     setEventToDelete(event);
     setIsDeleteDialogOpen(true);
   };
 
-  const handleToggleStatus = async (event: EventWithRelations) => {
+  const handleToggleStatus = async (event: EventWithRelationsDTO) => {
     const result = await toggleEventStatus(event.id);
 
     if (result.success) {
       toast.success(
         event.isActive
           ? "Evento desactivado correctamente"
-          : "Evento activado correctamente"
+          : "Evento activado correctamente",
       );
       onRefresh();
     } else {

@@ -31,7 +31,7 @@ const navItems: NavItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: AppWindowIcon,
-    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR"],
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
   },
   {
     title: "Sectores",
@@ -55,7 +55,7 @@ const navItems: NavItem[] = [
     title: "Eventos",
     url: "/events",
     icon: AppWindowIcon,
-    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR"],
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Reservas",

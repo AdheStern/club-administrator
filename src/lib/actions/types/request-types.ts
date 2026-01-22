@@ -24,6 +24,8 @@ export interface CreateRequestDTO {
 
 export interface UpdateRequestDTO {
   id: string;
+  tableId?: string;
+  packageId?: string;
   clientData: GuestData;
   guestList: GuestData[];
   hasConsumption: boolean;
@@ -60,6 +62,7 @@ export interface RequestFilters {
   status?: string;
   eventId?: string;
   createdById?: string;
+  userIds?: string[];
   search?: string;
   dateFrom?: Date;
   dateTo?: Date;

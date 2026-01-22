@@ -1,13 +1,24 @@
+// src/components/system/requests/request-form-drawer.tsx
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, ChevronsUpDown, Loader2, Plus, Trash2 } from "lucide-react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Form,
   FormControl,
@@ -18,6 +29,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -33,7 +49,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { searchGuests } from "@/lib/actions/guest-actions";
 import {
   createRequest,
   getAvailableTablesForEvent,
@@ -46,6 +61,7 @@ import type {
   RequestWithRelations,
   UpdateRequestDTO,
 } from "@/lib/actions/types/request-types";
+import { cn } from "@/lib/utils";
 import { GuestAutocomplete } from "./guest-autocomplete";
 
 const guestSchema = z.object({
@@ -58,6 +74,7 @@ const guestSchema = z.object({
 
 const requestFormSchema = z.object({
   eventId: z.string().min(1, "El evento es requerido"),
+  sectorId: z.string().min(1, "El sector es requerido"),
   tableId: z.string().min(1, "La mesa es requerida"),
   packageId: z.string().min(1, "El paquete es requerido"),
   clientName: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
@@ -67,9 +84,9 @@ const requestFormSchema = z.object({
   clientPhone: z.string().min(7, "El teléfono debe tener al menos 7 dígitos"),
   clientEmail: z.string().email("Email inválido").optional().or(z.literal("")),
   clientInstagramHandle: z.string().optional(),
-  hasConsumption: z.boolean().default(false),
-  extraGuests: z.number().min(0, "No puede ser negativo").default(0),
-  guestList: z.array(guestSchema).optional(),
+  hasConsumption: z.boolean(),
+  extraGuests: z.number().min(0, "No puede ser negativo"),
+  guestList: z.array(guestSchema),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: "Debe aceptar los términos y condiciones",
   }),
@@ -85,6 +102,12 @@ interface AvailableTable {
   requiresGuestList: boolean;
 }
 
+interface AvailableSector {
+  id: string;
+  name: string;
+  requiresGuestList: boolean;
+}
+
 interface RequestFormDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -93,6 +116,17 @@ interface RequestFormDrawerProps {
   packages: PackageWithRelations[];
   userId: string;
   onSuccess: () => void;
+}
+
+function getImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_UPLOAD_URL || "/uploads";
+  return `${baseUrl}/${imagePath}`;
 }
 
 export function RequestFormDrawer({
@@ -106,16 +140,22 @@ export function RequestFormDrawer({
 }: RequestFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [availableTables, setAvailableTables] = useState<AvailableTable[]>([]);
+  const [availableSectors, setAvailableSectors] = useState<AvailableSector[]>(
+    [],
+  );
+  const [filteredTables, setFilteredTables] = useState<AvailableTable[]>([]);
   const [loadingTables, setLoadingTables] = useState(false);
-  const [selectedTable, setSelectedTable] = useState<AvailableTable | null>(
+  const [selectedSector, setSelectedSector] = useState<AvailableSector | null>(
     null,
   );
+  const [eventComboboxOpen, setEventComboboxOpen] = useState(false);
   const isEdit = !!request;
 
   const form = useForm<RequestFormValues>({
     resolver: zodResolver(requestFormSchema),
     defaultValues: {
       eventId: "",
+      sectorId: "",
       tableId: "",
       packageId: "",
       clientName: "",
@@ -136,43 +176,70 @@ export function RequestFormDrawer({
   });
 
   const selectedEventId = form.watch("eventId");
-  const selectedTableId = form.watch("tableId");
+  const selectedSectorId = form.watch("sectorId");
+
+  const loadAvailableTables = useCallback(
+    async (eventId: string) => {
+      setLoadingTables(true);
+      try {
+        const result = await getAvailableTablesForEvent(eventId, userId);
+        if (result.success && result.data) {
+          setAvailableTables(result.data);
+
+          const uniqueSectors = result.data.reduce((acc, table) => {
+            if (!acc.find((s) => s.id === table.sectorId)) {
+              acc.push({
+                id: table.sectorId,
+                name: table.sectorName,
+                requiresGuestList: table.requiresGuestList,
+              });
+            }
+            return acc;
+          }, [] as AvailableSector[]);
+
+          setAvailableSectors(uniqueSectors);
+        } else {
+          setAvailableTables([]);
+          setAvailableSectors([]);
+          toast.error(result.error || "Error al cargar mesas disponibles");
+        }
+      } catch {
+        setAvailableTables([]);
+        setAvailableSectors([]);
+        toast.error("Error al cargar mesas");
+      } finally {
+        setLoadingTables(false);
+      }
+    },
+    [userId],
+  );
 
   useEffect(() => {
     if (selectedEventId && !isEdit) {
       loadAvailableTables(selectedEventId);
     }
-  }, [selectedEventId, isEdit]);
+  }, [selectedEventId, isEdit, loadAvailableTables]);
 
   useEffect(() => {
-    if (selectedTableId && availableTables.length > 0) {
-      const table = availableTables.find((t) => t.id === selectedTableId);
-      setSelectedTable(table || null);
-    }
-  }, [selectedTableId, availableTables]);
+    if (selectedSectorId && availableTables.length > 0) {
+      const sector = availableSectors.find((s) => s.id === selectedSectorId);
+      setSelectedSector(sector || null);
 
-  async function loadAvailableTables(eventId: string) {
-    setLoadingTables(true);
-    try {
-      const result = await getAvailableTablesForEvent(eventId);
-      if (result.success && result.data) {
-        setAvailableTables(result.data);
-      } else {
-        setAvailableTables([]);
-        toast.error("Error al cargar mesas disponibles");
-      }
-    } catch (error) {
-      setAvailableTables([]);
-      toast.error("Error al cargar mesas");
-    } finally {
-      setLoadingTables(false);
+      const tables = availableTables.filter(
+        (t) => t.sectorId === selectedSectorId,
+      );
+      setFilteredTables(tables);
+    } else {
+      setSelectedSector(null);
+      setFilteredTables([]);
     }
-  }
+  }, [selectedSectorId, availableTables, availableSectors]);
 
   useEffect(() => {
     if (request) {
       form.reset({
         eventId: request.eventId,
+        sectorId: request.table.sectorId,
         tableId: request.tableId,
         packageId: request.packageId,
         clientName: request.client.name,
@@ -194,6 +261,7 @@ export function RequestFormDrawer({
     } else {
       form.reset({
         eventId: "",
+        sectorId: "",
         tableId: "",
         packageId: "",
         clientName: "",
@@ -223,7 +291,7 @@ export function RequestFormDrawer({
             email: values.clientEmail,
             instagramHandle: values.clientInstagramHandle,
           },
-          guestList: values.guestList || [],
+          guestList: values.guestList,
           hasConsumption: values.hasConsumption,
           extraGuests: values.extraGuests,
         };
@@ -249,7 +317,7 @@ export function RequestFormDrawer({
             email: values.clientEmail,
             instagramHandle: values.clientInstagramHandle,
           },
-          guestList: values.guestList || [],
+          guestList: values.guestList,
           hasConsumption: values.hasConsumption,
           extraGuests: values.extraGuests,
           termsAccepted: values.termsAccepted,
@@ -266,7 +334,7 @@ export function RequestFormDrawer({
           toast.error(result.error || "Error al crear solicitud");
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
     } finally {
       setIsLoading(false);
@@ -278,7 +346,7 @@ export function RequestFormDrawer({
   );
   const activePackages = packages.filter((p) => p.isActive);
 
-  const requiresGuestList = selectedTable?.requiresGuestList ?? false;
+  const requiresGuestList = selectedSector?.requiresGuestList ?? false;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -305,78 +373,183 @@ export function RequestFormDrawer({
                   control={form.control}
                   name="eventId"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-col">
                       <FormLabel>Evento</FormLabel>
-                      <Select
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          form.setValue("tableId", "");
-                          setSelectedTable(null);
-                        }}
-                        defaultValue={field.value}
+                      <Popover
+                        open={eventComboboxOpen}
+                        onOpenChange={setEventComboboxOpen}
                       >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un evento" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {activeEvents.map((event) => (
-                            <SelectItem key={event.id} value={event.id}>
-                              {event.name} -{" "}
-                              {new Date(event.eventDate).toLocaleDateString(
-                                "es-BO",
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground",
                               )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                            >
+                              {field.value
+                                ? activeEvents.find(
+                                    (event) => event.id === field.value,
+                                  )?.name
+                                : "Selecciona un evento"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                          <Command>
+                            <CommandInput placeholder="Buscar evento..." />
+                            <CommandList>
+                              <CommandEmpty>
+                                No se encontraron eventos.
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {activeEvents.map((event) => {
+                                  const imageUrl = getImageUrl(event.image);
+                                  return (
+                                    <CommandItem
+                                      key={event.id}
+                                      value={`${event.name} ${new Date(event.eventDate).toLocaleDateString("es-BO")}`}
+                                      onSelect={() => {
+                                        field.onChange(event.id);
+                                        form.setValue("sectorId", "");
+                                        form.setValue("tableId", "");
+                                        setSelectedSector(null);
+                                        setEventComboboxOpen(false);
+                                      }}
+                                      className="flex items-center gap-3 p-2"
+                                    >
+                                      {imageUrl && (
+                                        <div className="relative w-16 h-16 flex-shrink-0 rounded overflow-hidden border">
+                                          <Image
+                                            src={imageUrl}
+                                            alt={event.name}
+                                            fill
+                                            className="object-cover"
+                                            unoptimized
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">
+                                          {event.name}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {new Date(
+                                            event.eventDate,
+                                          ).toLocaleDateString("es-BO")}
+                                        </p>
+                                      </div>
+                                      <Check
+                                        className={cn(
+                                          "ml-auto h-4 w-4",
+                                          event.id === field.value
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                    </CommandItem>
+                                  );
+                                })}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
                 {selectedEventId && (
-                  <FormField
-                    control={form.control}
-                    name="tableId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Mesa</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          disabled={loadingTables}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue
-                                placeholder={
-                                  loadingTables
-                                    ? "Cargando mesas..."
-                                    : availableTables.length === 0
-                                      ? "No hay mesas disponibles"
-                                      : "Selecciona una mesa"
-                                }
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {availableTables.map((table) => (
-                              <SelectItem key={table.id} value={table.id}>
-                                {table.sectorName} - {table.name}
-                                {table.requiresGuestList && " (Requiere lista)"}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>
-                          Solo se muestran mesas sin solicitudes activas
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="sectorId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sector</FormLabel>
+                          <Select
+                            onValueChange={(value) => {
+                              field.onChange(value);
+                              form.setValue("tableId", "");
+                            }}
+                            defaultValue={field.value}
+                            disabled={loadingTables}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue
+                                  placeholder={
+                                    loadingTables
+                                      ? "Cargando sectores..."
+                                      : availableSectors.length === 0
+                                        ? "No hay sectores disponibles"
+                                        : "Selecciona un sector"
+                                  }
+                                />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {availableSectors.map((sector) => (
+                                <SelectItem key={sector.id} value={sector.id}>
+                                  {sector.name}
+                                  {sector.requiresGuestList &&
+                                    " (Requiere lista)"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>
+                            Selecciona el sector para filtrar las mesas
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {selectedSectorId && (
+                      <FormField
+                        control={form.control}
+                        name="tableId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mesa</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={
+                                      filteredTables.length === 0
+                                        ? "No hay mesas disponibles en este sector"
+                                        : "Selecciona una mesa"
+                                    }
+                                  />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {filteredTables.map((table) => (
+                                  <SelectItem key={table.id} value={table.id}>
+                                    {table.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormDescription>
+                              {filteredTables.length} mesa(s) disponible(s) en{" "}
+                              {selectedSector?.name}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
+                  </>
                 )}
 
                 <FormField
@@ -583,7 +756,7 @@ export function RequestFormDrawer({
                               <FormItem>
                                 <FormLabel>Nombre completo</FormLabel>
                                 <GuestAutocomplete
-                                  value={field.value}
+                                  value={field.value ?? ""}
                                   onValueChange={field.onChange}
                                   onGuestSelect={(guest) => {
                                     form.setValue(
@@ -754,7 +927,7 @@ export function RequestFormDrawer({
                           </FormLabel>
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground bg-muted p-4 rounded-lg max-h-[200px] overflow-y-auto">
+                      <div className="text-xs text-muted-foreground bg-muted p-4 rounded-lg max-h-50 overflow-y-auto">
                         <p className="font-semibold mb-2">
                           Términos y Condiciones
                         </p>

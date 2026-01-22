@@ -1,7 +1,8 @@
+// src/components/system/requests/request-list.tsx
 "use client";
 
 import { Filter, Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -59,26 +60,28 @@ export function RequestList({
     userRole,
   );
 
-  const visibleRequests = isManager
-    ? initialRequests
-    : initialRequests.filter((request) => request.createdById === userId);
+  const visibleRequests = useMemo(() => {
+    return initialRequests;
+  }, [initialRequests]);
 
-  const filteredRequests = visibleRequests.filter((request) => {
-    const matchesSearch =
-      request.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.client.identityCard
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      request.event.name.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredRequests = useMemo(() => {
+    return visibleRequests.filter((request) => {
+      const matchesSearch =
+        request.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        request.client.identityCard
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        request.event.name.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesStatus =
-      statusFilter === "all" || request.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" || request.status === statusFilter;
 
-    const matchesEvent =
-      eventFilter === "all" || request.eventId === eventFilter;
+      const matchesEvent =
+        eventFilter === "all" || request.eventId === eventFilter;
 
-    return matchesSearch && matchesStatus && matchesEvent;
-  });
+      return matchesSearch && matchesStatus && matchesEvent;
+    });
+  }, [visibleRequests, searchQuery, statusFilter, eventFilter]);
 
   const handleView = (request: RequestWithRelations) => {
     setSelectedRequest(request);
@@ -225,7 +228,7 @@ export function RequestList({
                   onApprove={handleApprove}
                   onObserve={handleObserve}
                   onReject={handleReject}
-                  canEdit={request.createdById === userId}
+                  canEdit={request.createdById === userId || isManager}
                   canManage={isManager}
                   onRefresh={handleSuccess}
                 />
@@ -242,6 +245,7 @@ export function RequestList({
         events={upcomingEvents}
         packages={packages}
         userId={userId}
+        userRole={userRole}
         onSuccess={() => {
           handleSuccess();
           handleFormClose();

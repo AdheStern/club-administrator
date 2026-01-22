@@ -1,5 +1,4 @@
 // src/components/system/requests/request-container.tsx
-
 "use client";
 
 import { CheckCircle, Clock, FileText, XCircle } from "lucide-react";
@@ -8,7 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getEvents } from "@/lib/actions/event-actions";
 import { getPackages } from "@/lib/actions/package-actions";
-import { getRequests } from "@/lib/actions/request-actions";
+import { getRequestsByUserRole } from "@/lib/actions/request-actions";
 import type { EventWithRelations } from "@/lib/actions/types/event-types";
 import type { PackageWithRelations } from "@/lib/actions/types/package-types";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
@@ -50,7 +49,7 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
     setIsLoading(true);
     try {
       const [requestsResult, eventsResult, packagesResult] = await Promise.all([
-        getRequests({}, { pageSize: 1000 }),
+        getRequestsByUserRole(userId, userRole, {}, { pageSize: 1000 }),
         getEvents({}, { pageSize: 1000 }),
         getPackages({}, { pageSize: 1000 }),
       ]);
@@ -75,7 +74,7 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [userId, userRole]);
 
   useEffect(() => {
     loadData();

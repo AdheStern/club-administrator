@@ -1,5 +1,4 @@
 // src/components/navigation/site-header.tsx
-
 "use client";
 
 import { CameraIcon, SidebarIcon } from "lucide-react";
@@ -10,28 +9,48 @@ import { ModeToggle } from "@/components/theme/mode-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useSession } from "@/lib/auth-client";
+
+const CAMERA_ALLOWED_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "VALIDATOR"];
 
 export function SiteHeader() {
   const { toggleSidebar } = useSidebar();
+  const { data: session } = useSession();
+
+  const userRole = session?.user?.role || "USER";
+  const canAccessCamera = CAMERA_ALLOWED_ROLES.includes(userRole);
 
   return (
-    <header className="bg-background sticky top-0 z-50 flex w-full items-center border-b">
-      <div className="flex h-(--header-height) w-full items-center gap-2 px-4">
+    <header className="bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
+      <div className="container flex h-14 items-center gap-4">
         <Button
-          className="h-6 w-6"
           variant="ghost"
           size="icon"
           onClick={toggleSidebar}
+          className="shrink-0"
         >
-          <SidebarIcon />
+          <SidebarIcon className="h-5 w-5" />
+          <span className="sr-only">Toggle sidebar</span>
         </Button>
-        <Separator orientation="vertical" className="mr-2 h-4" />
+
         <DynamicBreadcrumbs />
-        <SearchForm className="w-full sm:ml-auto sm:w-auto" />
-        <Link href="qr-validator" className="ml-4">
-          <CameraIcon className="h-6 w-6 text-muted-foreground" />
-        </Link>
-        <ModeToggle />
+
+        <div className="flex flex-1 items-center justify-end gap-2">
+          {/* <SearchForm /> */}
+          <Separator orientation="vertical" className="h-6" />
+          {canAccessCamera && (
+            <>
+              <Button variant="ghost" size="icon" asChild>
+                <Link href="/qr-validator">
+                  <CameraIcon className="h-5 w-5" />
+                  <span className="sr-only">QR Validator</span>
+                </Link>
+              </Button>
+              <Separator orientation="vertical" className="h-6" />
+            </>
+          )}
+          <ModeToggle />
+        </div>
       </div>
     </header>
   );

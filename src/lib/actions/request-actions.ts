@@ -1,3 +1,4 @@
+// src/lib/actions/request-actions.ts
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -76,7 +77,36 @@ class RequestRepository {
 
     const client = await GuestHelper.findOrCreateGuest(dto.clientData);
 
-    if (request.table.sector.requiresGuestList && dto.guestList) {
+    const updateData: {
+      clientId: string;
+      tableId?: string;
+      packageId?: string;
+      hasConsumption: boolean;
+      extraGuests: number;
+      updatedAt: Date;
+    } = {
+      clientId: client.id,
+      hasConsumption: dto.hasConsumption,
+      extraGuests: dto.extraGuests,
+      updatedAt: new Date(),
+    };
+
+    if (dto.tableId) {
+      updateData.tableId = dto.tableId;
+    }
+
+    if (dto.packageId) {
+      updateData.packageId = dto.packageId;
+    }
+
+    const newTable = dto.tableId
+      ? await db.table.findUnique({
+          where: { id: dto.tableId },
+          include: { sector: true },
+        })
+      : request.table;
+
+    if (newTable?.sector.requiresGuestList && dto.guestList) {
       await db.guestInvitation.deleteMany({
         where: { requestId: dto.id },
       });
@@ -95,12 +125,7 @@ class RequestRepository {
 
     return db.request.update({
       where: { id: dto.id },
-      data: {
-        clientId: client.id,
-        hasConsumption: dto.hasConsumption,
-        extraGuests: dto.extraGuests,
-        updatedAt: new Date(),
-      },
+      data: updateData,
       include: this.getInclude(),
     });
   }
@@ -170,6 +195,10 @@ class RequestRepository {
       ...(filters.createdById && { createdById: filters.createdById }),
     };
 
+    if (filters.userIds && filters.userIds.length > 0) {
+      where.createdById = { in: filters.userIds };
+    }
+
     if (filters.search) {
       where.OR = [
         { client: { name: { contains: filters.search, mode: "insensitive" } } },
@@ -227,6 +256,7 @@ class RequestRepository {
         select: {
           id: true,
           name: true,
+          sectorId: true,
           sector: {
             select: {
               id: true,
@@ -314,11 +344,11 @@ class RequestService {
   ): Promise<ActionResult<RequestWithRelations>> {
     try {
       const request = await this.repository.findById(dto.id);
-      if (!request || !["PENDING", "OBSERVED"].includes(request.status)) {
+      if (!request) {
         return {
           success: false,
-          error: "Solo se pueden editar solicitudes pendientes u observadas",
-          code: "INVALID_STATUS",
+          error: "Solicitud no encontrada",
+          code: "NOT_FOUND",
         };
       }
 
@@ -627,6 +657,50 @@ class RequestService {
     }
   }
 
+  async getRequestsByUserRole(
+    userId: string,
+    userRole: string,
+    filters: RequestFilters = {},
+    pagination: PaginationParams = {},
+  ): Promise<ActionResult<PaginatedResult<RequestWithRelations>>> {
+    try {
+      const isManager = ["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(userRole);
+      const isSupervisor = userRole === "SUPERVISOR";
+
+      let userIdsFilter: string[] = [];
+
+      if (isManager) {
+        // Admins y managers ven todas las solicitudes
+      } else if (isSupervisor) {
+        const subordinates = await db.user.findMany({
+          where: { managerId: userId },
+          select: { id: true },
+        });
+
+        userIdsFilter = [userId, ...subordinates.map((s) => s.id)];
+      } else {
+        userIdsFilter = [userId];
+      }
+
+      const updatedFilters = {
+        ...filters,
+        ...(userIdsFilter.length > 0 && { userIds: userIdsFilter }),
+      };
+
+      const result = await this.repository.findMany(updatedFilters, pagination);
+      return { success: true, data: result };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al obtener solicitudes",
+        code: "FETCH_ERROR",
+      };
+    }
+  }
+
   async getRequests(
     filters: RequestFilters = {},
     pagination: PaginationParams = {},
@@ -758,7 +832,10 @@ class RequestService {
     }
   }
 
-  async getAvailableTablesForEvent(eventId: string): Promise<
+  async getAvailableTablesForEvent(
+    eventId: string,
+    userId?: string,
+  ): Promise<
     ActionResult<
       Array<{
         id: string;
@@ -770,10 +847,40 @@ class RequestService {
     >
   > {
     try {
+      let userSectors: string[] | undefined;
+
+      if (userId) {
+        const user = await db.user.findUnique({
+          where: { id: userId },
+          include: {
+            userSectors: {
+              select: {
+                sectorId: true,
+              },
+            },
+          },
+        });
+
+        const isManager = ["SUPER_ADMIN", "ADMIN", "MANAGER"].includes(
+          user?.role || "",
+        );
+
+        if (!isManager && user?.userSectors) {
+          userSectors = user.userSectors.map((us) => us.sectorId);
+        }
+      }
+
       const eventTables = await db.eventTable.findMany({
         where: {
           eventId,
           isBooked: false,
+          ...(userSectors && {
+            table: {
+              sectorId: {
+                in: userSectors,
+              },
+            },
+          }),
         },
         include: {
           table: {
@@ -865,6 +972,20 @@ export async function getRequestById(id: string) {
   return requestService.getRequestById(id);
 }
 
+export async function getRequestsByUserRole(
+  userId: string,
+  userRole: string,
+  filters?: RequestFilters,
+  pagination?: PaginationParams,
+) {
+  return requestService.getRequestsByUserRole(
+    userId,
+    userRole,
+    filters,
+    pagination,
+  );
+}
+
 export async function getRequests(
   filters?: RequestFilters,
   pagination?: PaginationParams,
@@ -876,6 +997,9 @@ export async function downloadRequestQRs(requestId: string) {
   return requestService.downloadRequestQRs(requestId);
 }
 
-export async function getAvailableTablesForEvent(eventId: string) {
-  return requestService.getAvailableTablesForEvent(eventId);
+export async function getAvailableTablesForEvent(
+  eventId: string,
+  userId?: string,
+) {
+  return requestService.getAvailableTablesForEvent(eventId, userId);
 }
