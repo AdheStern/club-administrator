@@ -1,10 +1,7 @@
-// /src/lib/actions/qr-validation-actions.ts
-
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { convertDecimalsToNumbers } from "./helpers/decimal-converter";
 import type { ActionResult } from "./types/action-types";
 
 interface QRValidationResult {
@@ -14,7 +11,7 @@ interface QRValidationResult {
     id: string;
     name: string;
     identityCard: string;
-  };
+  } | null;
   request: {
     id: string;
     event: {
@@ -35,6 +32,22 @@ interface QRValidationResult {
   scannedBy?: {
     name: string;
   };
+  qrType: string;
+  remainingUses?: number;
+}
+
+interface QRHistoryItem {
+  id: string;
+  code: string;
+  guest: {
+    name: string;
+    identityCard: string;
+  } | null;
+  usedAt: Date;
+  scannedBy: {
+    name: string;
+  };
+  qrType: string;
 }
 
 class QRValidationRepository {
@@ -52,6 +65,19 @@ class QRValidationRepository {
         scannedBy: {
           select: {
             name: true,
+          },
+        },
+        scanHistory: {
+          orderBy: {
+            scannedAt: "desc",
+          },
+          take: 1,
+          include: {
+            scannedBy: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -87,12 +113,13 @@ class QRValidationRepository {
     });
   }
 
-  async markAsUsed(code: string, scannedById: string) {
-    return await db.qREntry.update({
-      where: { code },
+  async incrementUsage(qrEntryId: string, scannedById: string) {
+    const qrEntry = await db.qREntry.update({
+      where: { id: qrEntryId },
       data: {
-        isUsed: true,
-        usedAt: new Date(),
+        currentUses: {
+          increment: 1,
+        },
         scannedById,
       },
       include: {
@@ -110,11 +137,69 @@ class QRValidationRepository {
         },
       },
     });
+
+    await db.qRScan.create({
+      data: {
+        qrEntryId,
+        scannedById,
+      },
+    });
+
+    return qrEntry;
   }
 }
 
 class QRValidationService {
   private repository = new QRValidationRepository();
+
+  private isQRUsed(qrEntry: {
+    usageType: string;
+    currentUses: number;
+    maxUses: number | null;
+    validFrom: Date | null;
+    validUntil: Date | null;
+  }): boolean {
+    if (qrEntry.usageType === "SINGLE_USE") {
+      return qrEntry.currentUses >= 1;
+    }
+
+    if (qrEntry.usageType === "MULTI_USE" && qrEntry.maxUses) {
+      return qrEntry.currentUses >= qrEntry.maxUses;
+    }
+
+    if (qrEntry.usageType === "UNLIMITED") {
+      return false;
+    }
+
+    if (qrEntry.usageType === "DATE_RANGE") {
+      const now = new Date();
+      if (qrEntry.validFrom && now < qrEntry.validFrom) return true;
+      if (qrEntry.validUntil && now > qrEntry.validUntil) return true;
+      return false;
+    }
+
+    return qrEntry.currentUses >= 1;
+  }
+
+  private getRemainingUses(qrEntry: {
+    usageType: string;
+    currentUses: number;
+    maxUses: number | null;
+  }): number | undefined {
+    if (qrEntry.usageType === "SINGLE_USE") {
+      return Math.max(0, 1 - qrEntry.currentUses);
+    }
+
+    if (qrEntry.usageType === "MULTI_USE" && qrEntry.maxUses) {
+      return Math.max(0, qrEntry.maxUses - qrEntry.currentUses);
+    }
+
+    if (qrEntry.usageType === "UNLIMITED") {
+      return undefined;
+    }
+
+    return undefined;
+  }
 
   async validateQR(code: string): Promise<ActionResult<QRValidationResult>> {
     try {
@@ -128,6 +213,14 @@ class QRValidationService {
         };
       }
 
+      if (!qrEntry.isActive) {
+        return {
+          success: false,
+          error: "Código QR desactivado",
+          code: "INACTIVE_QR",
+        };
+      }
+
       const request = await this.repository.findRequestById(qrEntry.requestId);
 
       if (!request) {
@@ -138,9 +231,12 @@ class QRValidationService {
         };
       }
 
+      const isUsed = this.isQRUsed(qrEntry);
+      const lastScan = qrEntry.scanHistory[0];
+
       const result: QRValidationResult = {
         isValid: true,
-        isUsed: qrEntry.isUsed,
+        isUsed,
         guest: qrEntry.guest,
         request: {
           id: request.id,
@@ -148,9 +244,11 @@ class QRValidationService {
           table: request.table,
           package: request.package,
         },
-        ...(qrEntry.isUsed && {
-          usedAt: qrEntry.usedAt!,
-          scannedBy: qrEntry.scannedBy!,
+        qrType: qrEntry.usageType,
+        remainingUses: this.getRemainingUses(qrEntry),
+        ...(lastScan && {
+          usedAt: lastScan.scannedAt,
+          scannedBy: lastScan.scannedBy,
         }),
       };
 
@@ -159,6 +257,7 @@ class QRValidationService {
         data: result,
       };
     } catch (error) {
+      console.error("Error validating QR:", error);
       return {
         success: false,
         error: "Error al validar código QR",
@@ -187,7 +286,20 @@ class QRValidationService {
         };
       }
 
-      const updatedQR = await this.repository.markAsUsed(code, scannedById);
+      const qrEntry = await this.repository.findByCode(code);
+
+      if (!qrEntry) {
+        return {
+          success: false,
+          error: "Código QR no válido",
+          code: "INVALID_QR",
+        };
+      }
+
+      const updatedQR = await this.repository.incrementUsage(
+        qrEntry.id,
+        scannedById,
+      );
       const request = await this.repository.findRequestById(
         updatedQR.requestId,
       );
@@ -204,7 +316,7 @@ class QRValidationService {
 
       const result: QRValidationResult = {
         isValid: true,
-        isUsed: true,
+        isUsed: this.isQRUsed(updatedQR),
         guest: updatedQR.guest,
         request: {
           id: request.id,
@@ -212,7 +324,9 @@ class QRValidationService {
           table: request.table,
           package: request.package,
         },
-        usedAt: updatedQR.usedAt!,
+        qrType: updatedQR.usageType,
+        remainingUses: this.getRemainingUses(updatedQR),
+        usedAt: new Date(),
         scannedBy: updatedQR.scannedBy!,
       };
 
@@ -221,6 +335,7 @@ class QRValidationService {
         data: result,
       };
     } catch (error) {
+      console.error("Error scanning QR:", error);
       return {
         success: false,
         error: "Error al escanear código QR",
@@ -232,19 +347,20 @@ class QRValidationService {
 
 class QRHistoryRepository {
   async getRecentScans(limit: number) {
-    return await db.qREntry.findMany({
-      where: {
-        isUsed: true,
-      },
+    return await db.qRScan.findMany({
       take: limit,
       orderBy: {
-        usedAt: "desc",
+        scannedAt: "desc",
       },
       include: {
-        guest: {
-          select: {
-            name: true,
-            identityCard: true,
+        qrEntry: {
+          include: {
+            guest: {
+              select: {
+                name: true,
+                identityCard: true,
+              },
+            },
           },
         },
         scannedBy: {
@@ -260,31 +376,17 @@ class QRHistoryRepository {
 class QRHistoryService {
   private repository = new QRHistoryRepository();
 
-  async getRecentScans(limit: number = 20): Promise<
-    ActionResult<
-      Array<{
-        id: string;
-        code: string;
-        guest: {
-          name: string;
-          identityCard: string;
-        };
-        usedAt: Date;
-        scannedBy: {
-          name: string;
-        };
-      }>
-    >
-  > {
+  async getRecentScans(limit = 20): Promise<ActionResult<QRHistoryItem[]>> {
     try {
       const scans = await this.repository.getRecentScans(limit);
 
       const result = scans.map((scan) => ({
         id: scan.id,
-        code: scan.code,
-        guest: scan.guest,
-        usedAt: scan.usedAt!,
-        scannedBy: scan.scannedBy!,
+        code: scan.qrEntry.code,
+        guest: scan.qrEntry.guest,
+        usedAt: scan.scannedAt,
+        scannedBy: scan.scannedBy,
+        qrType: scan.qrEntry.usageType,
       }));
 
       return {
@@ -292,6 +394,7 @@ class QRHistoryService {
         data: result,
       };
     } catch (error) {
+      console.error("Error fetching scan history:", error);
       return {
         success: false,
         error: "Error al obtener historial de escaneos",
