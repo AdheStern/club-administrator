@@ -1,189 +1,168 @@
 // src/components/system/dashboard/dashboard-container.tsx
 
+// src/components/system/dashboard/dashboard-container.tsx
 "use client";
 
 import {
   Activity,
-  AlertCircle,
-  Calendar,
   CheckCircle,
   Clock,
   DollarSign,
-  TrendingUp,
+  TrendingDown,
   Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState, useTransition } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  type DashboardStats,
+import type {
+  DashboardFilters,
+  DashboardStats,
+  FilterOptions,
   getDashboardData,
-  type PendingRequest,
-  type RequestsByMonth,
-  type RequestsByStatus,
-  type TopClient,
-  type UpcomingEvent,
+  PendingRequest,
+  RequestsByMonth,
+  RequestsByStatus,
+  TopClient,
+  UpcomingEvent,
+  UserPerformance as UserPerformanceType,
 } from "@/lib/actions/dashboard-actions";
+import { DashboardFiltersComponent } from "./dashboard-filters";
 import { PendingRequestsList } from "./pending-requests-list";
 import { RequestsChart } from "./requests-chart";
 import { StatsCard } from "./stats-card";
 import { StatusDistribution } from "./status-distribution";
 import { TopClientsTable } from "./top-clients-table";
-import { UpcomingEvents } from "./upcoming-events";
+import { UpcomingEventsCarousel } from "./upcoming-events";
+import { UserPerformance } from "./user-performance";
 
-export function DashboardContainer() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [requestsByStatus, setRequestsByStatus] = useState<RequestsByStatus[]>(
-    []
-  );
-  const [requestsByMonth, setRequestsByMonth] = useState<RequestsByMonth[]>([]);
-  const [topClients, setTopClients] = useState<TopClient[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+interface DashboardContainerProps {
+  initialData: {
+    stats: DashboardStats;
+    requestsByStatus: RequestsByStatus[];
+    requestsByMonth: RequestsByMonth[];
+    topClients: TopClient[];
+    upcomingEvents: UpcomingEvent[];
+    pendingRequests: PendingRequest[];
+    userPerformance: UserPerformanceType[];
+    filterOptions: FilterOptions;
+  };
+  getDashboardDataAction: typeof getDashboardData;
+}
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+export function DashboardContainer({
+  initialData,
+  getDashboardDataAction,
+}: DashboardContainerProps) {
+  const [data, setData] = useState(initialData);
+  const [filters, setFilters] = useState<DashboardFilters>({});
+  const [isPending, startTransition] = useTransition();
 
-  const loadDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      const result = await getDashboardData();
+  const handleFiltersChange = (newFilters: DashboardFilters) => {
+    setFilters(newFilters);
 
-      if (result.success && result.data) {
-        setStats(result.data.stats);
-        setRequestsByStatus(result.data.requestsByStatus);
-        setRequestsByMonth(result.data.requestsByMonth);
-        setTopClients(result.data.topClients);
-        setUpcomingEvents(result.data.upcomingEvents);
-        setPendingRequests(result.data.pendingRequests);
-      } else {
-        toast.error(result.error || "Error al cargar datos del dashboard");
+    startTransition(async () => {
+      const result = await getDashboardDataAction(newFilters);
+      if (result.success) {
+        setData(result.data);
       }
-    } catch (error) {
-      toast.error("Error inesperado al cargar el dashboard");
-      console.error("Dashboard error:", error);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("es-BO", {
-      style: "currency",
-      currency: "BOB",
-      minimumFractionDigits: 2,
-    }).format(value);
-  };
+  const approvalRate =
+    data.stats.totalRequests > 0
+      ? (data.stats.approvedRequests / data.stats.totalRequests) * 100
+      : 0;
 
-  const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  };
-
-  if (isLoading) {
+  if (isPending) {
     return <DashboardSkeleton />;
-  }
-
-  if (!stats) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-lg font-medium">Error al cargar el dashboard</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Por favor, intenta recargar la página
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      <div className="flex items-center justify-end">
+        <DashboardFiltersComponent
+          filters={filters}
+          options={data.filterOptions}
+          onFiltersChange={handleFiltersChange}
+        />
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Total Solicitudes"
-          value={stats.totalRequests}
-          description="Todas las solicitudes registradas"
+          title="Solicitudes Totales"
+          value={data.stats.totalRequests}
+          description="Total registradas"
           icon={Activity}
         />
-        <StatsCard
-          title="Solicitudes Pendientes"
-          value={stats.pendingRequests}
-          description={`${stats.observedRequests} observadas`}
-          icon={Clock}
-          className="border-yellow-200 bg-yellow-50/50"
-        />
-        <StatsCard
-          title="Solicitudes Aprobadas"
-          value={stats.approvedRequests}
-          description="Confirmadas y activas"
-          icon={CheckCircle}
-          className="border-green-200 bg-green-50/50"
-        />
-        <StatsCard
-          title="Revenue Total"
-          value={formatCurrency(stats.totalRevenue)}
-          description="De solicitudes aprobadas"
-          icon={DollarSign}
-          className="border-blue-200 bg-blue-50/50"
-        />
-      </div>
 
-      {/* Secondary Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
-          title="Eventos Totales"
-          value={stats.totalEvents}
-          description={`${stats.upcomingEvents} próximos`}
-          icon={Calendar}
+          title="Pendientes"
+          value={data.stats.pendingRequests}
+          description="Requieren revisión"
+          icon={Clock}
+          className="border-l-4 border-l-yellow-500"
         />
+
         <StatsCard
-          title="Clientes Registrados"
-          value={stats.totalClients}
-          description="Total de invitados"
-          icon={Users}
+          title="Aprobadas"
+          value={data.stats.approvedRequests}
+          description={`${approvalRate.toFixed(1)}% del total`}
+          icon={CheckCircle}
+          className="border-l-4 border-l-green-500"
         />
+
         <StatsCard
-          title="Tiempo de Aprobación"
-          value={formatTime(stats.averageApprovalTime)}
-          description="Promedio de revisión"
-          icon={TrendingUp}
+          title="Ingresos"
+          value={`Bs. ${data.stats.totalRevenue.toLocaleString("es-BO", { minimumFractionDigits: 2 })}`}
+          description="Total recaudado"
+          icon={DollarSign}
+          className="border-l-4 border-l-blue-500"
         />
+
         <StatsCard
-          title="Solicitudes Rechazadas"
-          value={stats.rejectedRequests}
+          title="Observadas"
+          value={data.stats.observedRequests}
+          description="Con observaciones"
+          icon={TrendingDown}
+          className="border-l-4 border-l-orange-500"
+        />
+
+        <StatsCard
+          title="Rechazadas"
+          value={data.stats.rejectedRequests}
           description="No aprobadas"
           icon={XCircle}
-          className="border-red-200 bg-red-50/50"
+          className="border-l-4 border-l-red-500"
+        />
+
+        <StatsCard
+          title="Tiempo Promedio"
+          value={`${data.stats.averageApprovalTime.toFixed(1)}h`}
+          description="De aprobación"
+          icon={Clock}
+        />
+
+        <StatsCard
+          title="Clientes Totales"
+          value={data.stats.totalClients}
+          description="Registrados"
+          icon={Users}
         />
       </div>
 
-      {/* Charts */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <RequestsChart data={requestsByMonth} />
-        <StatusDistribution data={requestsByStatus} />
+      <div className="grid gap-6 md:grid-cols-7">
+        <UpcomingEventsCarousel data={data.upcomingEvents} />
+        <StatusDistribution data={data.requestsByStatus} />
       </div>
 
-      {/* Tables */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <TopClientsTable data={topClients} />
-        <UpcomingEvents data={upcomingEvents} />
+      <RequestsChart data={data.requestsByMonth} />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <PendingRequestsList data={data.pendingRequests} />
+        <TopClientsTable data={data.topClients} />
       </div>
 
-      {/* Pending Requests */}
-      <div className="grid gap-4 grid-cols-1">
-        <PendingRequestsList data={pendingRequests} />
-      </div>
+      <UserPerformance data={data.userPerformance} />
     </div>
   );
 }
@@ -191,34 +170,29 @@ export function DashboardContainer() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Stats Cards Skeleton */}
+      <div className="flex items-center justify-end">
+        <Skeleton className="h-10 w-32" />
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
+        {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton key={i} className="h-32" />
         ))}
       </div>
 
-      {/* Secondary Stats Skeleton */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-32" />
-        ))}
+      <div className="grid gap-6 md:grid-cols-7">
+        <Skeleton className="h-96 col-span-3" />
+        <Skeleton className="h-96 col-span-4" />
       </div>
 
-      {/* Charts Skeleton */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <Skeleton className="h-[400px] col-span-4" />
-        <Skeleton className="h-[400px] col-span-3" />
+      <Skeleton className="h-96" />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Skeleton className="h-96" />
+        <Skeleton className="h-96" />
       </div>
 
-      {/* Tables Skeleton */}
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-        <Skeleton className="h-[400px] col-span-4" />
-        <Skeleton className="h-[400px] col-span-3" />
-      </div>
-
-      {/* Pending Requests Skeleton */}
-      <Skeleton className="h-[400px]" />
+      <Skeleton className="h-96" />
     </div>
   );
 }

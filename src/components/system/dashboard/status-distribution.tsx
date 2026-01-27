@@ -2,6 +2,7 @@
 
 "use client";
 
+import { PieChart as PieChartIcon } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RequestsByStatus } from "@/lib/actions/dashboard-actions";
@@ -13,13 +14,15 @@ interface StatusDistributionProps {
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "#fbbf24",
   OBSERVED: "#fb923c",
-  APPROVED: "#34d399",
+  PRE_APPROVED: "#60a5fa",
+  APPROVED: "#10b981",
   REJECTED: "#ef4444",
 };
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pendiente",
   OBSERVED: "Observada",
+  PRE_APPROVED: "Pre-Aprobada",
   APPROVED: "Aprobada",
   REJECTED: "Rechazada",
 };
@@ -32,9 +35,12 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
   }));
 
   return (
-    <Card className="col-span-3">
+    <Card className="col-span-4">
       <CardHeader>
-        <CardTitle>Distribución de Solicitudes</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <PieChartIcon className="h-5 w-5 text-primary" />
+          Distribución de Solicitudes
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -45,7 +51,7 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
               cy="50%"
               labelLine={false}
               label={({ name, percentage }) => `${name}: ${percentage}%`}
-              outerRadius={80}
+              outerRadius={90}
               fill="#8884d8"
               dataKey="value"
             >
@@ -58,22 +64,34 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
                 />
               ))}
             </Pie>
-            <Tooltip />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--background))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "0.5rem",
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
-        <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-2 gap-3 mt-4">
           {chartData.map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div
+              key={index}
+              className="flex items-center gap-2 p-2 rounded-lg border"
+            >
               <div
-                className="w-3 h-3 rounded-full"
+                className="w-4 h-4 rounded-full flex-shrink-0"
                 style={{
                   backgroundColor:
                     STATUS_COLORS[data[index].status] || STATUS_COLORS.PENDING,
                 }}
               />
-              <span className="text-sm text-muted-foreground">
-                {item.name}: {item.value}
-              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{item.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.value} solicitudes
+                </p>
+              </div>
             </div>
           ))}
         </div>

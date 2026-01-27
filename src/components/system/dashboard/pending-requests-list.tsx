@@ -2,7 +2,7 @@
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { AlertCircle, CheckCircle, Clock, User } from "lucide-react"; // ✅ Agregar CheckCircle aquí
+import { AlertCircle, CheckCircle, Clock, User } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,12 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
     return `Hace ${days} día${days !== 1 ? "s" : ""}`;
   };
 
+  const getWaitingTimeBadge = (hours: number) => {
+    if (hours < 24) return "default";
+    if (hours < 48) return "secondary";
+    return "destructive";
+  };
+
   return (
     <Card className="col-span-4">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -52,7 +58,7 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
             {data.map((request, index) => (
               <div key={request.id}>
                 <Link href={`/requests?id=${request.id}`}>
-                  <div className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
+                  <div className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/50 transition-all cursor-pointer">
                     <div className="flex-1 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -89,18 +95,16 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
                             {format(
                               new Date(request.createdAt),
                               "dd MMM yyyy, HH:mm",
-                              { locale: es }
+                              { locale: es },
                             )}
                           </span>
                         </div>
-                        <span
-                          className={cn(
-                            "font-medium",
-                            getWaitingTimeColor(request.waitingTime)
-                          )}
+                        <Badge
+                          variant={getWaitingTimeBadge(request.waitingTime)}
+                          className="text-xs"
                         >
                           {getWaitingTimeText(request.waitingTime)}
-                        </span>
+                        </Badge>
                       </div>
                     </div>
                   </div>

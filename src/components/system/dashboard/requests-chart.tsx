@@ -2,6 +2,7 @@
 
 "use client";
 
+import { BarChart3 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -23,12 +24,15 @@ export function RequestsChart({ data }: RequestsChartProps) {
   return (
     <Card className="col-span-4">
       <CardHeader>
-        <CardTitle>Solicitudes por Mes</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          Solicitudes por Mes
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="month"
               stroke="#888888"
@@ -42,24 +46,30 @@ export function RequestsChart({ data }: RequestsChartProps) {
               tickLine={false}
               axisLine={false}
             />
-            <Tooltip />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "hsl(var(--background))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "0.5rem",
+              }}
+            />
             <Legend />
             <Bar
               dataKey="count"
               name="Total"
-              fill="#8884d8"
+              fill="hsl(var(--primary))"
               radius={[8, 8, 0, 0]}
             />
             <Bar
               dataKey="approved"
               name="Aprobadas"
-              fill="#82ca9d"
+              fill="#10b981"
               radius={[8, 8, 0, 0]}
             />
             <Bar
               dataKey="rejected"
               name="Rechazadas"
-              fill="#ff6b6b"
+              fill="#ef4444"
               radius={[8, 8, 0, 0]}
             />
           </BarChart>
