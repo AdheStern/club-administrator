@@ -20,6 +20,7 @@ import type {
   RejectRequestDTO,
   RequestFilters,
   RequestWithRelations,
+  TransferTableDTO,
   UpdateRequestDTO,
 } from "./types/request-types";
 
@@ -329,11 +330,10 @@ class RequestService {
         success: true,
         data: convertDecimalsToNumbers(request) as RequestWithRelations,
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Error al crear solicitud",
+        error: "Error al crear solicitud",
         code: "CREATE_ERROR",
       };
     }
@@ -823,7 +823,7 @@ class RequestService {
           fileName: `QR-${request.event.name}-${request.client.name}`,
         },
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         error: "Error al generar códigos QR",
@@ -873,7 +873,6 @@ class RequestService {
       const eventTables = await db.eventTable.findMany({
         where: {
           eventId,
-          isBooked: false,
           ...(userSectors && {
             table: {
               sectorId: {
@@ -921,11 +920,14 @@ class RequestService {
           requiresGuestList: et.table.sector.requiresGuestList,
         }));
 
+      console.log("Available tables:", availableTables);
+
       return {
         success: true,
         data: availableTables,
       };
     } catch (error) {
+      console.error("Error fetching available tables:", error);
       return {
         success: false,
         error:
@@ -933,6 +935,181 @@ class RequestService {
             ? error.message
             : "Error al obtener mesas disponibles",
         code: "FETCH_ERROR",
+      };
+    }
+  }
+
+  async transferTable(
+    dto: TransferTableDTO,
+  ): Promise<ActionResult<RequestWithRelations>> {
+    try {
+      const request = await this.repository.findById(dto.id);
+
+      if (!request) {
+        return {
+          success: false,
+          error: "Solicitud no encontrada",
+          code: "NOT_FOUND",
+        };
+      }
+
+      if (request.status === "APPROVED" || request.status === "REJECTED") {
+        return {
+          success: false,
+          error: "No se puede transferir una solicitud aprobada o rechazada",
+          code: "INVALID_STATUS",
+        };
+      }
+
+      const newTable = await db.table.findUnique({
+        where: { id: dto.newTableId },
+        include: { sector: true },
+      });
+
+      if (!newTable) {
+        return {
+          success: false,
+          error: "Mesa no encontrada",
+          code: "NOT_FOUND",
+        };
+      }
+
+      if (newTable.sector.id !== request.table.sector.id) {
+        return {
+          success: false,
+          error: "Solo se puede transferir a mesas del mismo sector",
+          code: "DIFFERENT_SECTOR",
+        };
+      }
+
+      const eventTable = await db.eventTable.findUnique({
+        where: {
+          eventId_tableId: {
+            eventId: request.eventId,
+            tableId: dto.newTableId,
+          },
+        },
+      });
+
+      if (!eventTable) {
+        return {
+          success: false,
+          error: "La mesa no está disponible para este evento",
+          code: "TABLE_NOT_AVAILABLE",
+        };
+      }
+
+      if (eventTable.isBooked && eventTable.tableId !== request.tableId) {
+        return {
+          success: false,
+          error: "La mesa ya está reservada",
+          code: "TABLE_ALREADY_BOOKED",
+        };
+      }
+
+      const existingRequest = await db.request.findFirst({
+        where: {
+          eventId: request.eventId,
+          tableId: dto.newTableId,
+          status: { in: ["PENDING", "OBSERVED", "PRE_APPROVED", "APPROVED"] },
+          id: { not: dto.id },
+        },
+      });
+
+      if (existingRequest) {
+        return {
+          success: false,
+          error: "La mesa ya tiene una solicitud activa",
+          code: "TABLE_HAS_ACTIVE_REQUEST",
+        };
+      }
+
+      const updatedRequest = await db.$transaction(async (tx) => {
+        await tx.eventTable.update({
+          where: {
+            eventId_tableId: {
+              eventId: request.eventId,
+              tableId: request.tableId,
+            },
+          },
+          data: { isBooked: false },
+        });
+
+        await tx.eventTable.update({
+          where: {
+            eventId_tableId: {
+              eventId: request.eventId,
+              tableId: dto.newTableId,
+            },
+          },
+          data: { isBooked: true },
+        });
+
+        return tx.request.update({
+          where: { id: dto.id },
+          data: {
+            tableId: dto.newTableId,
+            updatedAt: new Date(),
+          },
+          include: {
+            event: {
+              select: {
+                id: true,
+                name: true,
+                eventDate: true,
+                image: true,
+                freeInvitationQRCount: true,
+                paymentQR: true,
+              },
+            },
+            table: {
+              select: {
+                id: true,
+                name: true,
+                sectorId: true,
+                sector: {
+                  select: {
+                    id: true,
+                    name: true,
+                    requiresGuestList: true,
+                  },
+                },
+              },
+            },
+            package: true,
+            client: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+            approvedBy: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            guestInvitations: {
+              include: { guest: true },
+            },
+          },
+        });
+      });
+
+      revalidatePath("/requests");
+
+      return {
+        success: true,
+        data: convertDecimalsToNumbers(updatedRequest) as RequestWithRelations,
+      };
+    } catch {
+      return {
+        success: false,
+        error: "Error al transferir mesa",
+        code: "TRANSFER_ERROR",
       };
     }
   }
@@ -1002,4 +1179,8 @@ export async function getAvailableTablesForEvent(
   userId?: string,
 ) {
   return requestService.getAvailableTablesForEvent(eventId, userId);
+}
+
+export async function transferTable(dto: TransferTableDTO) {
+  return requestService.transferTable(dto);
 }

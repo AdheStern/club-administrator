@@ -25,6 +25,7 @@ import {
 import { RequestCard } from "./request-card";
 import { RequestDetailsDialog } from "./request-details-dialog";
 import { RequestFormDrawer } from "./request-form-drawer";
+import { TransferTableDialog } from "./transfer-table-dialog";
 
 interface RequestListProps {
   initialRequests: RequestWithRelations[];
@@ -54,6 +55,9 @@ export function RequestList({
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [isObserveOpen, setIsObserveOpen] = useState(false);
   const [isRejectOpen, setIsRejectOpen] = useState(false);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedRequestForTransfer, setSelectedRequestForTransfer] =
+    useState<RequestWithRelations | null>(null);
 
   const isManager = ["MANAGER", "ADMIN", "SUPER_ADMIN"].includes(userRole);
   const canCreate = ["USER", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(
@@ -110,6 +114,11 @@ export function RequestList({
   const handleReject = (request: RequestWithRelations) => {
     setSelectedRequest(request);
     setIsRejectOpen(true);
+  };
+
+  const handleTransferTable = (request: RequestWithRelations) => {
+    setSelectedRequestForTransfer(request);
+    setTransferDialogOpen(true);
   };
 
   const handleFormClose = () => {
@@ -228,6 +237,7 @@ export function RequestList({
                   onApprove={handleApprove}
                   onObserve={handleObserve}
                   onReject={handleReject}
+                  onTransferTable={isManager ? handleTransferTable : undefined}
                   canEdit={request.createdById === userId || isManager}
                   canManage={isManager}
                   onRefresh={handleSuccess}
@@ -245,7 +255,6 @@ export function RequestList({
         events={upcomingEvents}
         packages={packages}
         userId={userId}
-        userRole={userRole}
         onSuccess={() => {
           handleSuccess();
           handleFormClose();
@@ -286,6 +295,14 @@ export function RequestList({
         open={isRejectOpen}
         onOpenChange={setIsRejectOpen}
         request={selectedRequest}
+        userId={userId}
+        onSuccess={handleSuccess}
+      />
+
+      <TransferTableDialog
+        open={transferDialogOpen}
+        onOpenChange={setTransferDialogOpen}
+        request={selectedRequestForTransfer}
         userId={userId}
         onSuccess={handleSuccess}
       />

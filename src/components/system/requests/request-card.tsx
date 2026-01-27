@@ -1,8 +1,10 @@
+// src/components/system/requests/request-card.tsx
 "use client";
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
+  ArrowRightLeft,
   Calendar,
   CheckCircle,
   Clock,
@@ -37,6 +39,7 @@ interface RequestCardProps {
   onApprove?: (request: RequestWithRelations) => void;
   onObserve?: (request: RequestWithRelations) => void;
   onReject?: (request: RequestWithRelations) => void;
+  onTransferTable?: (request: RequestWithRelations) => void;
   canEdit?: boolean;
   canManage?: boolean;
   onRefresh?: () => void;
@@ -81,6 +84,7 @@ export function RequestCard({
   onApprove,
   onObserve,
   onReject,
+  onTransferTable,
   canEdit = false,
   canManage = false,
   onRefresh,
@@ -99,6 +103,12 @@ export function RequestCard({
     canEdit && (request.status === "PENDING" || request.status === "OBSERVED");
 
   const canBeManaged =
+    canManage &&
+    (request.status === "PENDING" ||
+      request.status === "OBSERVED" ||
+      request.status === "PRE_APPROVED");
+
+  const canTransferTable =
     canManage &&
     (request.status === "PENDING" ||
       request.status === "OBSERVED" ||
@@ -236,6 +246,12 @@ export function RequestCard({
             {canBeEdited && onEdit && (
               <DropdownMenuItem onClick={() => onEdit(request)}>
                 Editar
+              </DropdownMenuItem>
+            )}
+            {canTransferTable && onTransferTable && (
+              <DropdownMenuItem onClick={() => onTransferTable(request)}>
+                <ArrowRightLeft className="mr-2 h-4 w-4" />
+                Transferir Mesa
               </DropdownMenuItem>
             )}
             {canBeManaged && (

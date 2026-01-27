@@ -1,5 +1,4 @@
 // src/lib/actions/types/request-types.ts
-
 import type { Decimal } from "@prisma/client/runtime/library";
 
 export interface GuestData {
@@ -58,6 +57,11 @@ export interface RejectRequestDTO {
   managerNotes: string;
 }
 
+export interface TransferTableDTO {
+  id: string;
+  newTableId: string;
+}
+
 export interface RequestFilters {
   status?: string;
   eventId?: string;
@@ -100,6 +104,7 @@ export interface RequestWithRelations {
   table: {
     id: string;
     name: string;
+    sectorId: string;
     sector: {
       id: string;
       name: string;
