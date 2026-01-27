@@ -52,9 +52,9 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
     <AuthFormContainer
       title="Ingresa a tu cuenta"
       description="Ingresa tu email y contraseña para continuar"
-      footerText="¿No tienes una cuenta?"
-      footerLinkText="Registrarse"
-      footerLinkHref="/sign-up"
+      footerText=""
+      footerLinkText=""
+      footerLinkHref=""
       className={className}
     >
       <Form {...form}>
