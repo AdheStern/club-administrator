@@ -115,6 +115,7 @@ interface RequestFormDrawerProps {
   events: EventWithRelations[];
   packages: PackageWithRelations[];
   userId: string;
+  userRole: string;
   onSuccess: () => void;
 }
 
@@ -136,6 +137,7 @@ export function RequestFormDrawer({
   events,
   packages,
   userId,
+  userRole,
   onSuccess,
 }: RequestFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
@@ -150,6 +152,8 @@ export function RequestFormDrawer({
   );
   const [eventComboboxOpen, setEventComboboxOpen] = useState(false);
   const isEdit = !!request;
+
+  const canManageConsumption = !["USER"].includes(userRole);
 
   const form = useForm<RequestFormValues>({
     resolver: zodResolver(requestFormSchema),
@@ -861,26 +865,28 @@ export function RequestFormDrawer({
             <div className="space-y-4">
               <h3 className="font-semibold">Opciones Adicionales</h3>
 
-              <FormField
-                control={form.control}
-                name="hasConsumption"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>La mesa tendrá consumo</FormLabel>
-                      <FormDescription>
-                        Marcar si la mesa incluye bebidas o alimentos
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
+              {canManageConsumption && (
+                <FormField
+                  control={form.control}
+                  name="hasConsumption"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>La mesa tendrá consumo</FormLabel>
+                        <FormDescription>
+                          Marcar si la mesa incluye bebidas o alimentos
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
