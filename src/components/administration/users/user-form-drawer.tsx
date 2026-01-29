@@ -3,13 +3,16 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, X } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { CalendarIcon, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Form,
@@ -54,11 +57,13 @@ import {
   getUserSectors,
   updateUserSectors,
 } from "@/lib/actions/user-sector-actions";
+import { cn } from "@/lib/utils";
 
 const userFormSchema = z.object({
   name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
   email: z.string().email("Email inválido"),
   password: z.string().optional(),
+  birthDate: z.date().optional(),
   role: z.enum([
     "SUPER_ADMIN",
     "ADMIN",
@@ -108,6 +113,7 @@ export function UserFormDrawer({
       name: "",
       email: "",
       password: "",
+      birthDate: undefined,
       role: "USER",
       status: "ACTIVE",
       departmentId: "",
@@ -140,6 +146,7 @@ export function UserFormDrawer({
         form.reset({
           name: user.name,
           email: user.email,
+          birthDate: user.birthDate ? new Date(user.birthDate) : undefined,
           role: user.role as UserRoleType,
           status: user.status as UserStatusType,
           departmentId: user.department?.id ?? "",
@@ -152,6 +159,7 @@ export function UserFormDrawer({
           name: "",
           email: "",
           password: "",
+          birthDate: undefined,
           role: "USER",
           status: "ACTIVE",
           departmentId: "",
@@ -187,6 +195,7 @@ export function UserFormDrawer({
           id: user.id,
           name: values.name,
           email: values.email,
+          birthDate: values.birthDate,
           role: values.role as UserRoleType,
           status: values.status as UserStatusType,
           departmentId: values.departmentId || undefined,
@@ -208,6 +217,7 @@ export function UserFormDrawer({
           name: values.name,
           email: values.email,
           password: values.password,
+          birthDate: values.birthDate,
           role: values.role as UserRoleType,
           status: values.status as UserStatusType,
           departmentId: values.departmentId || undefined,
@@ -288,6 +298,50 @@ export function UserFormDrawer({
                       El email no se puede modificar
                     </FormDescription>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="birthDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Fecha de nacimiento</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "PPP", { locale: es })
+                          ) : (
+                            <span>Selecciona una fecha</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormDescription>Opcional</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -419,7 +473,7 @@ export function UserFormDrawer({
                         .filter((m) => m.id !== user?.id)
                         .map((manager) => (
                           <SelectItem key={manager.id} value={manager.id}>
-                            {manager.name}
+                            {manager.name} ({manager.role})
                           </SelectItem>
                         ))}
                     </SelectContent>

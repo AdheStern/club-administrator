@@ -1,3 +1,5 @@
+// src/lib/actions/user-actions.ts
+
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
@@ -15,14 +17,34 @@ import type {
 } from "./types/action-types";
 
 const UserFactory = {
-  prepareUserData(dto: CreateUserDTO) {
-    return {
-      role: dto.role ?? UserRole.USER,
-      status: dto.status ?? UserStatus.ACTIVE,
-      departmentId: dto.departmentId ?? null,
-      managerId: dto.managerId ?? null,
-      image: dto.image ?? null,
-    };
+  prepareUserData(dto: CreateUserDTO | UpdateUserDTO) {
+    const baseData: Record<string, unknown> = {};
+
+    if ("role" in dto) {
+      baseData.role = dto.role ?? UserRole.USER;
+    }
+
+    if ("status" in dto) {
+      baseData.status = dto.status ?? UserStatus.ACTIVE;
+    }
+
+    if ("departmentId" in dto) {
+      baseData.departmentId = dto.departmentId ?? null;
+    }
+
+    if ("managerId" in dto) {
+      baseData.managerId = dto.managerId ?? null;
+    }
+
+    if ("image" in dto) {
+      baseData.image = dto.image ?? null;
+    }
+
+    if ("birthDate" in dto) {
+      baseData.birthDate = dto.birthDate ?? null;
+    }
+
+    return baseData;
   },
 };
 
@@ -142,18 +164,14 @@ class UserRepository {
     const updatedUser = await db.user.update({
       where: { id: result.user.id },
       data: {
-        role: preparedData.role,
-        status: preparedData.status,
-        departmentId: preparedData.departmentId,
-        managerId: preparedData.managerId,
-        image: preparedData.image,
+        ...preparedData,
         emailVerified: true,
         updatedAt: new Date(),
       },
       include: {
         department: { select: { id: true, name: true } },
-        manager: { select: { id: true, name: true } },
-        subordinates: { select: { id: true, name: true } },
+        manager: { select: { id: true, name: true, role: true } },
+        subordinates: { select: { id: true, name: true, role: true } },
       },
     });
 
@@ -161,16 +179,20 @@ class UserRepository {
   }
 
   async update(id: string, data: Partial<UpdateUserDTO>) {
+    const preparedData = UserFactory.prepareUserData(data as UpdateUserDTO);
+
     return db.user.update({
       where: { id },
       data: {
-        ...data,
+        ...(data.name && { name: data.name }),
+        ...(data.email && { email: data.email }),
+        ...preparedData,
         updatedAt: new Date(),
       },
       include: {
         department: { select: { id: true, name: true } },
-        manager: { select: { id: true, name: true } },
-        subordinates: { select: { id: true, name: true } },
+        manager: { select: { id: true, name: true, role: true } },
+        subordinates: { select: { id: true, name: true, role: true } },
       },
     });
   }
@@ -180,8 +202,8 @@ class UserRepository {
       where: { id },
       include: {
         department: { select: { id: true, name: true } },
-        manager: { select: { id: true, name: true } },
-        subordinates: { select: { id: true, name: true } },
+        manager: { select: { id: true, name: true, role: true } },
+        subordinates: { select: { id: true, name: true, role: true } },
       },
     });
   }
@@ -219,8 +241,8 @@ class UserRepository {
         orderBy: { [sortBy]: sortOrder },
         include: {
           department: { select: { id: true, name: true } },
-          manager: { select: { id: true, name: true } },
-          subordinates: { select: { id: true, name: true } },
+          manager: { select: { id: true, name: true, role: true } },
+          subordinates: { select: { id: true, name: true, role: true } },
         },
       }),
       db.user.count({ where }),
@@ -244,7 +266,30 @@ class UserRepository {
   }
 
   async updateStatus(id: string, status: UserStatus) {
-    return this.update(id, { status });
+    return this.update(id, { id, status });
+  }
+
+  async findAllManagers() {
+    return db.user.findMany({
+      where: {
+        role: {
+          in: [
+            UserRole.SUPER_ADMIN,
+            UserRole.ADMIN,
+            UserRole.MANAGER,
+            UserRole.SUPERVISOR,
+          ],
+        },
+        status: UserStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
   }
 }
 
@@ -368,7 +413,7 @@ class UserService {
 
       const user = await this.repository.create(dto);
 
-      revalidatePath("/administration/users");
+      revalidatePath("/dashboard/admin/users");
 
       return {
         success: true,
@@ -397,7 +442,7 @@ class UserService {
 
       const user = await this.repository.update(dto.id, dto);
 
-      revalidatePath("/administration/users");
+      revalidatePath("/dashboard/admin/users");
 
       return {
         success: true,
@@ -484,7 +529,7 @@ class UserService {
 
       await this.repository.delete(id);
 
-      revalidatePath("/administration/users");
+      revalidatePath("/dashboard/admin/users");
 
       return { success: true };
     } catch (error) {
@@ -504,7 +549,7 @@ class UserService {
     try {
       await this.repository.updateStatus(id, status);
 
-      revalidatePath("/administration/users");
+      revalidatePath("/dashboard/admin/users");
 
       return { success: true };
     } catch (error) {
@@ -513,6 +558,24 @@ class UserService {
         error:
           error instanceof Error ? error.message : "Error al actualizar estado",
         code: "UPDATE_STATUS_ERROR",
+      };
+    }
+  }
+
+  async getAllManagers(): Promise<ActionResult<UserWithRelations[]>> {
+    try {
+      const managers = await this.repository.findAllManagers();
+
+      return {
+        success: true,
+        data: managers as UserWithRelations[],
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Error al obtener managers",
+        code: "FETCH_ERROR",
       };
     }
   }
@@ -545,4 +608,8 @@ export async function deleteUser(id: string) {
 
 export async function updateUserStatus(id: string, status: UserStatus) {
   return userService.updateUserStatus(id, status);
+}
+
+export async function getAllManagers() {
+  return userService.getAllManagers();
 }
