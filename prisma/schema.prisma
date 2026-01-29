@@ -125,7 +125,7 @@ model OrganizationMember {
   id             String       @id
   organizationId String
   userId         String
-  role           OrgRole      @default(MEMBER)
+  role           String       @default("MEMBER")
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -139,24 +139,28 @@ model OrganizationMember {
 }
 
 model OrganizationInvitation {
-  id             String           @id
+  id             String   @id
   organizationId String
   email          String
-  role           OrgRole          @default(MEMBER)
-  status         InvitationStatus @default(PENDING)
+  role           String   @default("MEMBER")
+  status         String   @default("PENDING")
   inviterId      String
   expiresAt      DateTime
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  inviter        User             @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter        User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email])
   @@index([email])
   @@index([status])
   @@map("organization_invitation")
 }
+
+// ============================================
+// MODELOS PERSONALIZADOS
+// ============================================
 
 model Department {
   id          String   @id @default(cuid())
