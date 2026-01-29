@@ -1,5 +1,4 @@
 // src/app/(system)/dashboard/page.tsx
-
 import { AlertCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { DashboardContainer } from "@/components/system/dashboard/dashboard-container";
@@ -14,7 +13,7 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const result = await getDashboardData();
 
-  if (!result.success) {
+  if (!result.success || !result.data) {
     return (
       <div className="space-y-6">
         <div>

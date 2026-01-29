@@ -24,6 +24,21 @@ interface UpcomingEventsCarouselProps {
   data: UpcomingEvent[];
 }
 
+function getImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+
+  if (imagePath.startsWith("/")) {
+    return imagePath;
+  }
+
+  const uploadUrl = process.env.NEXT_PUBLIC_UPLOAD_URL || "/uploads";
+  return `${uploadUrl}/${imagePath}`;
+}
+
 export function UpcomingEventsCarousel({ data }: UpcomingEventsCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -47,6 +62,7 @@ export function UpcomingEventsCarousel({ data }: UpcomingEventsCarouselProps) {
   }
 
   const event = data[currentIndex];
+  const imageUrl = getImageUrl(event.image);
   const approvalRate =
     event.requestCount > 0
       ? (event.approvedCount / event.requestCount) * 100
@@ -96,9 +112,9 @@ export function UpcomingEventsCarousel({ data }: UpcomingEventsCarouselProps) {
       <CardContent>
         <div className="space-y-4">
           <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
-            {event.image ? (
+            {imageUrl ? (
               <Image
-                src={event.image}
+                src={imageUrl}
                 alt={event.name}
                 fill
                 className="object-cover"
