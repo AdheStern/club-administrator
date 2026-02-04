@@ -27,6 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { downloadRequestQRs, markAsPaid } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
@@ -368,22 +370,31 @@ export function RequestCard({
             </div>
 
             {canManage && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id={`paid-${request.id}`}
-                  checked={request.isPaid}
-                  onCheckedChange={handleMarkAsPaid}
-                  disabled={isMarkingPaid || request.isPaid}
-                />
-                <Label
-                  htmlFor={`paid-${request.id}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {request.isPaid
-                    ? "✓ Marcado como pagado"
-                    : "Marcar como pagado"}
-                </Label>
-              </div>
+              <>
+                <Field>
+                  <FieldLabel htmlFor="picture">Picture</FieldLabel>
+                  <Input id="picture" type="file" />
+                  <FieldDescription>
+                    Select a picture to upload.
+                  </FieldDescription>
+                </Field>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`paid-${request.id}`}
+                    checked={request.isPaid}
+                    onCheckedChange={handleMarkAsPaid}
+                    disabled={isMarkingPaid || request.isPaid}
+                  />
+                  <Label
+                    htmlFor={`paid-${request.id}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    {request.isPaid
+                      ? "✓ Marcado como pagado"
+                      : "Marcar como pagado"}
+                  </Label>
+                </div>
+              </>
             )}
           </div>
         )}

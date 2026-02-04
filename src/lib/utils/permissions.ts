@@ -1,6 +1,11 @@
 // src/lib/utils/permissions.ts
-
-export type UserRole = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "USER";
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "MANAGER"
+  | "SUPERVISOR"
+  | "VALIDATOR"
+  | "USER";
 
 interface PermissionConfig {
   allowedRoles: UserRole[];
@@ -37,12 +42,15 @@ const PERMISSIONS: Record<string, PermissionConfig> = {
   MANAGE_TABLES: {
     allowedRoles: ["SUPER_ADMIN", "ADMIN"],
   },
+  VIEW_DASHBOARD_ANALYTICS: {
+    allowedRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
+  },
 };
 
 export namespace PermissionService {
   export function hasPermission(
     userRole: UserRole,
-    permission: keyof typeof PERMISSIONS
+    permission: keyof typeof PERMISSIONS,
   ): boolean {
     const config = PERMISSIONS[permission];
     if (!config) {
@@ -53,19 +61,19 @@ export namespace PermissionService {
 
   export function hasAnyPermission(
     userRole: UserRole,
-    permissions: (keyof typeof PERMISSIONS)[]
+    permissions: (keyof typeof PERMISSIONS)[],
   ): boolean {
     return permissions.some((permission) =>
-      hasPermission(userRole, permission)
+      hasPermission(userRole, permission),
     );
   }
 
   export function hasAllPermissions(
     userRole: UserRole,
-    permissions: (keyof typeof PERMISSIONS)[]
+    permissions: (keyof typeof PERMISSIONS)[],
   ): boolean {
     return permissions.every((permission) =>
-      hasPermission(userRole, permission)
+      hasPermission(userRole, permission),
     );
   }
 
@@ -93,14 +101,14 @@ export namespace PermissionService {
 
 export function checkPermission(
   userRole: UserRole,
-  permission: keyof typeof PERMISSIONS
+  permission: keyof typeof PERMISSIONS,
 ): boolean {
   return PermissionService.hasPermission(userRole, permission);
 }
 
 export function requirePermission(
   userRole: UserRole,
-  permission: keyof typeof PERMISSIONS
+  permission: keyof typeof PERMISSIONS,
 ): void {
   if (!PermissionService.hasPermission(userRole, permission)) {
     throw new Error(`Permission denied: ${permission}`);
