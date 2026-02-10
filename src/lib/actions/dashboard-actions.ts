@@ -1,5 +1,4 @@
 // src/lib/actions/dashboard-actions.ts
-
 "use server";
 
 import { db } from "@/lib/db";
@@ -16,6 +15,65 @@ export interface DashboardStats {
   totalClients: number;
   totalRevenue: number;
   averageApprovalTime: number;
+}
+
+export interface EconomicMetrics {
+  totalRevenue: number;
+  revenueByStatus: {
+    approved: number;
+    pending: number;
+    preApproved: number;
+  };
+  revenueGrowth: number;
+  averageTicket: number;
+  revenueBySector: Array<{
+    sectorId: string;
+    sectorName: string;
+    revenue: number;
+    requestCount: number;
+  }>;
+  revenueByPackage: Array<{
+    packageId: string;
+    packageName: string;
+    revenue: number;
+    requestCount: number;
+  }>;
+  topRevenueEvents: Array<{
+    eventId: string;
+    eventName: string;
+    eventDate: Date;
+    revenue: number;
+    requestCount: number;
+  }>;
+}
+
+export interface SectorPerformance {
+  sectorId: string;
+  sectorName: string;
+  totalRevenue: number;
+  requestCount: number;
+  approvalRate: number;
+  averageTicket: number;
+  topTables: Array<{
+    tableId: string;
+    tableName: string;
+    revenue: number;
+    requestCount: number;
+  }>;
+}
+
+export interface UserPerformance {
+  userId: string;
+  userName: string;
+  requestsCreated: number;
+  requestsApproved: number;
+  approvalRate: number;
+  avgResponseTime: number;
+  totalRevenue: number;
+  revenueByMonth: Array<{
+    month: string;
+    revenue: number;
+  }>;
 }
 
 export interface RequestsByStatus {
@@ -38,6 +96,7 @@ export interface TopClient {
   requestCount: number;
   eventsAttended: number;
   loyaltyPoints: number;
+  totalSpent: number;
 }
 
 export interface UpcomingEvent {
@@ -48,6 +107,7 @@ export interface UpcomingEvent {
   requestCount: number;
   approvedCount: number;
   pendingCount: number;
+  potentialRevenue: number;
 }
 
 export interface PendingRequest {
@@ -63,15 +123,7 @@ export interface PendingRequest {
   };
   status: string;
   waitingTime: number;
-}
-
-export interface UserPerformance {
-  userId: string;
-  userName: string;
-  requestsCreated: number;
-  requestsApproved: number;
-  approvalRate: number;
-  avgResponseTime: number;
+  potentialRevenue: number;
 }
 
 export interface DashboardFilters {
@@ -86,7 +138,7 @@ export interface DashboardFilters {
 export interface FilterOptions {
   events: Array<{ value: string; label: string }>;
   sectors: Array<{ value: string; label: string }>;
-  tables: Array<{ value: string; label: string }>;
+  tables: Array<{ value: string; label: string; sectorId: string }>;
   users: Array<{ value: string; label: string }>;
 }
 
@@ -107,38 +159,13 @@ class DashboardRepository {
       approvedRequestsWithPackages,
     ] = await Promise.all([
       db.request.count({ where: whereClause }),
-      db.request.count({
-        where: {
-          ...whereClause,
-          status: "PENDING",
-        },
-      }),
-      db.request.count({
-        where: {
-          ...whereClause,
-          status: "APPROVED",
-        },
-      }),
-      db.request.count({
-        where: {
-          ...whereClause,
-          status: "REJECTED",
-        },
-      }),
-      db.request.count({
-        where: {
-          ...whereClause,
-          status: "OBSERVED",
-        },
-      }),
+      db.request.count({ where: { ...whereClause, status: "PENDING" } }),
+      db.request.count({ where: { ...whereClause, status: "APPROVED" } }),
+      db.request.count({ where: { ...whereClause, status: "REJECTED" } }),
+      db.request.count({ where: { ...whereClause, status: "OBSERVED" } }),
       db.event.count(),
       db.event.count({
-        where: {
-          eventDate: {
-            gte: now,
-          },
-          isActive: true,
-        },
+        where: { eventDate: { gte: now }, isActive: true },
       }),
       db.guest.count(),
       db.request.findMany({
@@ -150,10 +177,7 @@ class DashboardRepository {
         select: {
           reviewDuration: true,
           package: {
-            select: {
-              basePrice: true,
-              extraPersonPrice: true,
-            },
+            select: { basePrice: true, extraPersonPrice: true },
           },
           extraGuests: true,
         },
@@ -192,6 +216,280 @@ class DashboardRepository {
     };
   }
 
+  async getEconomicMetrics(
+    filters?: DashboardFilters,
+  ): Promise<EconomicMetrics> {
+    const whereClause = this.buildRequestWhereClause(filters);
+    const now = new Date();
+    const lastMonth = new Date(now);
+    lastMonth.setMonth(now.getMonth() - 1);
+
+    const requests = await db.request.findMany({
+      where: whereClause,
+      select: {
+        status: true,
+        package: {
+          select: {
+            id: true,
+            name: true,
+            basePrice: true,
+            extraPersonPrice: true,
+          },
+        },
+        extraGuests: true,
+        table: {
+          select: {
+            sector: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        event: {
+          select: { id: true, name: true, eventDate: true },
+        },
+        createdAt: true,
+      },
+    });
+
+    const lastMonthRequests = await db.request.findMany({
+      where: {
+        ...whereClause,
+        createdAt: { gte: lastMonth, lt: now },
+        status: "APPROVED",
+      },
+      select: {
+        package: {
+          select: { basePrice: true, extraPersonPrice: true },
+        },
+        extraGuests: true,
+      },
+    });
+
+    const calculateRevenue = (request: any) => {
+      const basePrice = Number(request.package.basePrice);
+      const extraPrice = request.extraGuests
+        ? request.extraGuests * Number(request.package.extraPersonPrice || 0)
+        : 0;
+      return basePrice + extraPrice;
+    };
+
+    let totalRevenue = 0;
+    const revenueByStatus = { approved: 0, pending: 0, preApproved: 0 };
+    const revenueBySectorMap = new Map<string, any>();
+    const revenueByPackageMap = new Map<string, any>();
+    const revenueByEventMap = new Map<string, any>();
+
+    requests.forEach((request) => {
+      const revenue = calculateRevenue(request);
+
+      if (request.status === "APPROVED") {
+        totalRevenue += revenue;
+        revenueByStatus.approved += revenue;
+      } else if (request.status === "PENDING") {
+        revenueByStatus.pending += revenue;
+      } else if (request.status === "PRE_APPROVED") {
+        revenueByStatus.preApproved += revenue;
+      }
+
+      const sectorKey = request.table.sector.id;
+      if (!revenueBySectorMap.has(sectorKey)) {
+        revenueBySectorMap.set(sectorKey, {
+          sectorId: sectorKey,
+          sectorName: request.table.sector.name,
+          revenue: 0,
+          requestCount: 0,
+        });
+      }
+      const sectorData = revenueBySectorMap.get(sectorKey);
+      if (request.status === "APPROVED") {
+        sectorData.revenue += revenue;
+      }
+      sectorData.requestCount++;
+
+      const packageKey = request.package.id;
+      if (!revenueByPackageMap.has(packageKey)) {
+        revenueByPackageMap.set(packageKey, {
+          packageId: packageKey,
+          packageName: request.package.name,
+          revenue: 0,
+          requestCount: 0,
+        });
+      }
+      const packageData = revenueByPackageMap.get(packageKey);
+      if (request.status === "APPROVED") {
+        packageData.revenue += revenue;
+      }
+      packageData.requestCount++;
+
+      const eventKey = request.event.id;
+      if (!revenueByEventMap.has(eventKey)) {
+        revenueByEventMap.set(eventKey, {
+          eventId: eventKey,
+          eventName: request.event.name,
+          eventDate: request.event.eventDate,
+          revenue: 0,
+          requestCount: 0,
+        });
+      }
+      const eventData = revenueByEventMap.get(eventKey);
+      if (request.status === "APPROVED") {
+        eventData.revenue += revenue;
+      }
+      eventData.requestCount++;
+    });
+
+    const lastMonthRevenue = lastMonthRequests.reduce(
+      (sum, request) => sum + calculateRevenue(request),
+      0,
+    );
+
+    const revenueGrowth =
+      lastMonthRevenue > 0
+        ? ((totalRevenue - lastMonthRevenue) / lastMonthRevenue) * 100
+        : 0;
+
+    const approvedCount = requests.filter(
+      (r) => r.status === "APPROVED",
+    ).length;
+    const averageTicket = approvedCount > 0 ? totalRevenue / approvedCount : 0;
+
+    const revenueBySector = Array.from(revenueBySectorMap.values()).sort(
+      (a, b) => b.revenue - a.revenue,
+    );
+
+    const revenueByPackage = Array.from(revenueByPackageMap.values()).sort(
+      (a, b) => b.revenue - a.revenue,
+    );
+
+    const topRevenueEvents = Array.from(revenueByEventMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+
+    return {
+      totalRevenue,
+      revenueByStatus,
+      revenueGrowth,
+      averageTicket,
+      revenueBySector,
+      revenueByPackage,
+      topRevenueEvents,
+    };
+  }
+
+  async getSectorPerformance(
+    filters?: DashboardFilters,
+  ): Promise<SectorPerformance[]> {
+    const whereClause = this.buildRequestWhereClause(filters);
+
+    const requests = await db.request.findMany({
+      where: whereClause,
+      select: {
+        status: true,
+        package: {
+          select: { basePrice: true, extraPersonPrice: true },
+        },
+        extraGuests: true,
+        table: {
+          select: {
+            id: true,
+            name: true,
+            sector: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    const sectorMap = new Map<
+      string,
+      {
+        sectorId: string;
+        sectorName: string;
+        totalRevenue: number;
+        requestCount: number;
+        approvedCount: number;
+        tables: Map<
+          string,
+          {
+            tableId: string;
+            tableName: string;
+            revenue: number;
+            requestCount: number;
+          }
+        >;
+      }
+    >();
+
+    requests.forEach((request) => {
+      const sectorKey = request.table.sector.id;
+      const revenue =
+        request.status === "APPROVED"
+          ? Number(request.package.basePrice) +
+            (request.extraGuests
+              ? request.extraGuests *
+                Number(request.package.extraPersonPrice || 0)
+              : 0)
+          : 0;
+
+      if (!sectorMap.has(sectorKey)) {
+        sectorMap.set(sectorKey, {
+          sectorId: sectorKey,
+          sectorName: request.table.sector.name,
+          totalRevenue: 0,
+          requestCount: 0,
+          approvedCount: 0,
+          tables: new Map(),
+        });
+      }
+
+      const sectorData = sectorMap.get(sectorKey);
+      sectorData!.totalRevenue += revenue;
+      sectorData!.requestCount++;
+
+      if (request.status === "APPROVED") {
+        sectorData!.approvedCount++;
+      }
+
+      const tableKey = request.table.id;
+      if (!sectorData!.tables.has(tableKey)) {
+        sectorData!.tables.set(tableKey, {
+          tableId: tableKey,
+          tableName: request.table.name,
+          revenue: 0,
+          requestCount: 0,
+        });
+      }
+
+      const tableData = sectorData!.tables.get(tableKey);
+      tableData!.revenue += revenue;
+      tableData!.requestCount++;
+    });
+
+    return Array.from(sectorMap.values()).map((sector) => ({
+      sectorId: sector.sectorId,
+      sectorName: sector.sectorName,
+      totalRevenue: sector.totalRevenue,
+      requestCount: sector.requestCount,
+      approvalRate:
+        sector.requestCount > 0
+          ? (sector.approvedCount / sector.requestCount) * 100
+          : 0,
+      averageTicket:
+        sector.approvedCount > 0
+          ? sector.totalRevenue / sector.approvedCount
+          : 0,
+      topTables: Array.from(sector.tables.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5) as Array<{
+        tableId: string;
+        tableName: string;
+        revenue: number;
+        requestCount: number;
+      }>,
+    }));
+  }
+
   async getRequestsByStatus(
     filters?: DashboardFilters,
   ): Promise<RequestsByStatus[]> {
@@ -225,9 +523,7 @@ class DashboardRepository {
     const requests = await db.request.findMany({
       where: {
         ...whereClause,
-        createdAt: {
-          gte: startDate,
-        },
+        createdAt: { gte: startDate },
       },
       select: {
         createdAt: true,
@@ -290,22 +586,39 @@ class DashboardRepository {
         eventsAttended: true,
         loyaltyPoints: true,
         requestsAsClient: {
-          where: whereClause,
+          where: {
+            ...whereClause,
+            status: "APPROVED",
+          },
           select: {
-            id: true,
+            package: {
+              select: { basePrice: true, extraPersonPrice: true },
+            },
+            extraGuests: true,
           },
         },
       },
     });
 
-    return clients.map((client) => ({
-      id: client.id,
-      name: client.name,
-      identityCard: client.identityCard,
-      requestCount: client.requestsAsClient.length,
-      eventsAttended: client.eventsAttended,
-      loyaltyPoints: client.loyaltyPoints,
-    }));
+    return clients.map((client) => {
+      const totalSpent = client.requestsAsClient.reduce((sum, request) => {
+        const basePrice = Number(request.package.basePrice);
+        const extraPrice = request.extraGuests
+          ? request.extraGuests * Number(request.package.extraPersonPrice || 0)
+          : 0;
+        return sum + basePrice + extraPrice;
+      }, 0);
+
+      return {
+        id: client.id,
+        name: client.name,
+        identityCard: client.identityCard,
+        requestCount: client.requestsAsClient.length,
+        eventsAttended: client.eventsAttended,
+        loyaltyPoints: client.loyaltyPoints,
+        totalSpent,
+      };
+    });
   }
 
   async getUpcomingEvents(
@@ -315,9 +628,7 @@ class DashboardRepository {
     const now = new Date();
 
     const eventWhere: any = {
-      eventDate: {
-        gte: now,
-      },
+      eventDate: { gte: now },
       isActive: true,
     };
 
@@ -327,9 +638,7 @@ class DashboardRepository {
 
     const events = await db.event.findMany({
       where: eventWhere,
-      orderBy: {
-        eventDate: "asc",
-      },
+      orderBy: { eventDate: "asc" },
       take: limit,
       select: {
         id: true,
@@ -340,23 +649,38 @@ class DashboardRepository {
           where: this.buildRequestWhereClause(filters),
           select: {
             status: true,
+            package: {
+              select: { basePrice: true, extraPersonPrice: true },
+            },
+            extraGuests: true,
           },
         },
       },
     });
 
-    return events.map((event) => ({
-      id: event.id,
-      name: event.name,
-      eventDate: event.eventDate,
-      image: event.image,
-      requestCount: event.requests.length,
-      approvedCount: event.requests.filter((r) => r.status === "APPROVED")
-        .length,
-      pendingCount: event.requests.filter(
-        (r) => r.status === "PENDING" || r.status === "OBSERVED",
-      ).length,
-    }));
+    return events.map((event) => {
+      const potentialRevenue = event.requests.reduce((sum, request) => {
+        const basePrice = Number(request.package.basePrice);
+        const extraPrice = request.extraGuests
+          ? request.extraGuests * Number(request.package.extraPersonPrice || 0)
+          : 0;
+        return sum + basePrice + extraPrice;
+      }, 0);
+
+      return {
+        id: event.id,
+        name: event.name,
+        eventDate: event.eventDate,
+        image: event.image,
+        requestCount: event.requests.length,
+        approvedCount: event.requests.filter((r) => r.status === "APPROVED")
+          .length,
+        pendingCount: event.requests.filter(
+          (r) => r.status === "PENDING" || r.status === "OBSERVED",
+        ).length,
+        potentialRevenue,
+      };
+    });
   }
 
   async getPendingRequests(
@@ -370,40 +694,45 @@ class DashboardRepository {
         ...whereClause,
         OR: [{ status: "PENDING" }, { status: "OBSERVED" }],
       },
-      orderBy: {
-        createdAt: "asc",
-      },
+      orderBy: { createdAt: "asc" },
       take: limit,
       select: {
         id: true,
         createdAt: true,
         status: true,
+        package: {
+          select: { basePrice: true, extraPersonPrice: true },
+        },
+        extraGuests: true,
         client: {
-          select: {
-            name: true,
-            identityCard: true,
-          },
+          select: { name: true, identityCard: true },
         },
         event: {
-          select: {
-            name: true,
-            eventDate: true,
-          },
+          select: { name: true, eventDate: true },
         },
       },
     });
 
     const now = Date.now();
 
-    return requests.map((request) => ({
-      id: request.id,
-      createdAt: request.createdAt,
-      client: request.client,
-      event: request.event,
-      status: request.status,
-      waitingTime:
-        (now - new Date(request.createdAt).getTime()) / (1000 * 60 * 60),
-    }));
+    return requests.map((request) => {
+      const potentialRevenue =
+        Number(request.package.basePrice) +
+        (request.extraGuests
+          ? request.extraGuests * Number(request.package.extraPersonPrice || 0)
+          : 0);
+
+      return {
+        id: request.id,
+        createdAt: request.createdAt,
+        client: request.client,
+        event: request.event,
+        status: request.status,
+        waitingTime:
+          (now - new Date(request.createdAt).getTime()) / (1000 * 60 * 60),
+        potentialRevenue,
+      };
+    });
   }
 
   async getUserPerformance(
@@ -411,6 +740,9 @@ class DashboardRepository {
     limit: number = 10,
   ): Promise<UserPerformance[]> {
     const whereClause = this.buildRequestWhereClause(filters);
+    const now = new Date();
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
 
     const userFilter: any = {
       role: { in: ["ADMIN", "MANAGER", "SUPERVISOR"] },
@@ -433,6 +765,10 @@ class DashboardRepository {
             status: true,
             createdAt: true,
             approvedAt: true,
+            package: {
+              select: { basePrice: true, extraPersonPrice: true },
+            },
+            extraGuests: true,
           },
         },
       },
@@ -445,12 +781,25 @@ class DashboardRepository {
         const requestsApproved = user.requestsCreated.filter(
           (r) => r.status === "APPROVED",
         ).length;
+
+        const totalRevenue = user.requestsCreated
+          .filter((r) => r.status === "APPROVED")
+          .reduce((sum, request) => {
+            const basePrice = Number(request.package.basePrice);
+            const extraPrice = request.extraGuests
+              ? request.extraGuests *
+                Number(request.package.extraPersonPrice || 0)
+              : 0;
+            return sum + basePrice + extraPrice;
+          }, 0);
+
         const approvalRate =
           requestsCreated > 0 ? (requestsApproved / requestsCreated) * 100 : 0;
 
         const approvedWithTime = user.requestsCreated.filter(
           (r) => r.status === "APPROVED" && r.approvedAt,
         );
+
         const avgResponseTime =
           approvedWithTime.length > 0
             ? approvedWithTime.reduce((sum, req) => {
@@ -462,6 +811,46 @@ class DashboardRepository {
               }, 0) / approvedWithTime.length
             : 0;
 
+        const revenueByMonthMap = new Map<string, number>();
+        for (let i = 0; i < 6; i++) {
+          const date = new Date(now);
+          date.setMonth(now.getMonth() - i);
+          const monthKey = date.toLocaleDateString("es-BO", {
+            year: "numeric",
+            month: "short",
+          });
+          revenueByMonthMap.set(monthKey, 0);
+        }
+
+        user.requestsCreated
+          .filter((r) => r.status === "APPROVED")
+          .forEach((request) => {
+            const monthKey = new Date(request.createdAt).toLocaleDateString(
+              "es-BO",
+              {
+                year: "numeric",
+                month: "short",
+              },
+            );
+
+            if (revenueByMonthMap.has(monthKey)) {
+              const revenue =
+                Number(request.package.basePrice) +
+                (request.extraGuests
+                  ? request.extraGuests *
+                    Number(request.package.extraPersonPrice || 0)
+                  : 0);
+              revenueByMonthMap.set(
+                monthKey,
+                revenueByMonthMap.get(monthKey)! + revenue,
+              );
+            }
+          });
+
+        const revenueByMonth = Array.from(revenueByMonthMap.entries())
+          .map(([month, revenue]) => ({ month, revenue }))
+          .reverse();
+
         return {
           userId: user.id,
           userName: user.name,
@@ -469,10 +858,12 @@ class DashboardRepository {
           requestsApproved,
           approvalRate,
           avgResponseTime,
+          totalRevenue,
+          revenueByMonth,
         };
       })
       .filter((u) => u.requestsCreated > 0)
-      .sort((a, b) => b.requestsApproved - a.requestsApproved);
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
 
     return userPerformanceData;
   }
@@ -508,7 +899,11 @@ class DashboardRepository {
     return {
       events: events.map((e) => ({ value: e.id, label: e.name })),
       sectors: sectors.map((s) => ({ value: s.id, label: s.name })),
-      tables: tables.map((t) => ({ value: t.id, label: t.name })),
+      tables: tables.map((t) => ({
+        value: t.id,
+        label: t.name,
+        sectorId: t.sectorId,
+      })),
       users: users.map((u) => ({ value: u.id, label: u.name })),
     };
   }
@@ -555,6 +950,8 @@ class DashboardService {
   async getDashboardData(filters?: DashboardFilters): Promise<
     ActionResult<{
       stats: DashboardStats;
+      economicMetrics: EconomicMetrics;
+      sectorPerformance: SectorPerformance[];
       requestsByStatus: RequestsByStatus[];
       requestsByMonth: RequestsByMonth[];
       topClients: TopClient[];
@@ -567,6 +964,8 @@ class DashboardService {
     try {
       const [
         stats,
+        economicMetrics,
+        sectorPerformance,
         requestsByStatus,
         requestsByMonth,
         topClients,
@@ -576,6 +975,8 @@ class DashboardService {
         filterOptions,
       ] = await Promise.all([
         this.repository.getGeneralStats(filters),
+        this.repository.getEconomicMetrics(filters),
+        this.repository.getSectorPerformance(filters),
         this.repository.getRequestsByStatus(filters),
         this.repository.getRequestsByMonth(filters, 6),
         this.repository.getTopClients(filters, 5),
@@ -589,6 +990,8 @@ class DashboardService {
         success: true,
         data: {
           stats,
+          economicMetrics,
+          sectorPerformance,
           requestsByStatus,
           requestsByMonth,
           topClients,

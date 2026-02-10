@@ -1,5 +1,4 @@
 // src/components/system/dashboard/requests-chart.tsx
-
 "use client";
 
 import { BarChart3 } from "lucide-react";
@@ -22,7 +21,7 @@ interface RequestsChartProps {
 
 export function RequestsChart({ data }: RequestsChartProps) {
   return (
-    <Card className="col-span-4">
+    <Card className="hover:shadow-lg transition-all">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />

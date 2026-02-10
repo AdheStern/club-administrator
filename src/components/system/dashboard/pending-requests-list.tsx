@@ -1,8 +1,15 @@
 // src/components/system/dashboard/pending-requests-list.tsx
+"use client";
 
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { AlertCircle, CheckCircle, Clock, User } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  User,
+} from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,17 +17,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import type { PendingRequest } from "@/lib/actions/dashboard-actions";
-import { cn } from "@/lib/utils";
 
 interface PendingRequestsListProps {
   data: PendingRequest[];
 }
 
 export function PendingRequestsList({ data }: PendingRequestsListProps) {
-  const getWaitingTimeColor = (hours: number) => {
-    if (hours < 24) return "text-green-600";
-    if (hours < 48) return "text-yellow-600";
-    return "text-red-600";
+  const formatCurrency = (value: number) => {
+    return `Bs. ${value.toLocaleString("es-BO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
   };
 
   const getWaitingTimeText = (hours: number) => {
@@ -40,7 +47,7 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
   };
 
   return (
-    <Card className="col-span-4">
+    <Card className="hover:shadow-lg transition-all">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           <AlertCircle className="h-5 w-5 text-yellow-500" />
@@ -88,16 +95,24 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          <span>
-                            {format(
-                              new Date(request.createdAt),
-                              "dd MMM yyyy, HH:mm",
-                              { locale: es },
-                            )}
-                          </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>
+                              {format(
+                                new Date(request.createdAt),
+                                "dd MMM yyyy, HH:mm",
+                                { locale: es },
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-green-600 font-medium">
+                            <DollarSign className="h-3 w-3" />
+                            <span>
+                              {formatCurrency(request.potentialRevenue)}
+                            </span>
+                          </div>
                         </div>
                         <Badge
                           variant={getWaitingTimeBadge(request.waitingTime)}
@@ -114,8 +129,8 @@ export function PendingRequestsList({ data }: PendingRequestsListProps) {
             ))}
 
             {data.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-20" />
+              <div className="text-center py-12 text-muted-foreground">
+                <CheckCircle className="h-16 w-16 mx-auto mb-3 opacity-20" />
                 <p>No hay solicitudes pendientes</p>
               </div>
             )}

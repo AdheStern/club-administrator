@@ -2,7 +2,7 @@
 "use client";
 
 import { Filter, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -56,13 +56,18 @@ export function DashboardFiltersComponent({
     setIsOpen(false);
   };
 
-  const filteredTables = filters.sectorId ? options.tables : [];
+  const filteredTables = useMemo(() => {
+    if (!filters.sectorId) return [];
+    return options.tables.filter(
+      (table) => table.sectorId === filters.sectorId,
+    );
+  }, [filters.sectorId, options.tables]);
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="relative">
-          <Filter className="h-4 w-4 mr-2" />
+        <Button variant="outline" className="relative gap-2">
+          <Filter className="h-4 w-4" />
           Filtros
           {hasActiveFilters && (
             <span className="absolute -top-1 -right-1 h-5 w-5 bg-primary rounded-full text-xs text-primary-foreground flex items-center justify-center font-medium">
@@ -81,7 +86,7 @@ export function DashboardFiltersComponent({
       <PopoverContent className="w-80" align="end">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="font-semibold">Filtros</h4>
+            <h4 className="font-semibold">Filtros del Dashboard</h4>
             {hasActiveFilters && (
               <Button
                 variant="ghost"
@@ -183,6 +188,22 @@ export function DashboardFiltersComponent({
               </Select>
             </div>
           </div>
+
+          {hasActiveFilters && (
+            <div className="pt-3 border-t">
+              <p className="text-xs text-muted-foreground">
+                {
+                  [
+                    filters.eventId,
+                    filters.sectorId,
+                    filters.tableId,
+                    filters.userId,
+                  ].filter(Boolean).length
+                }{" "}
+                filtro(s) activo(s)
+              </p>
+            </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>

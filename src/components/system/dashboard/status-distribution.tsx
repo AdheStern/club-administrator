@@ -1,5 +1,4 @@
 // src/components/system/dashboard/status-distribution.tsx
-
 "use client";
 
 import { PieChart as PieChartIcon } from "lucide-react";
@@ -35,7 +34,7 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
   }));
 
   return (
-    <Card className="col-span-4">
+    <Card className="hover:shadow-lg transition-all">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <PieChartIcon className="h-5 w-5 text-primary" />
@@ -73,6 +72,7 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
             />
           </PieChart>
         </ResponsiveContainer>
+
         <div className="grid grid-cols-2 gap-3 mt-4">
           {chartData.map((item, index) => (
             <div
