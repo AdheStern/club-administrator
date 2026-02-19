@@ -66,8 +66,20 @@ export function StatusDistribution({ data }: StatusDistributionProps) {
             <Tooltip
               contentStyle={{
                 backgroundColor: "hsl(var(--background))",
-                border: "1px solid hsl(var(--border))",
+                border: "2px solid hsl(var(--border))",
                 borderRadius: "0.5rem",
+                padding: "12px",
+                boxShadow:
+                  "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+              }}
+              labelStyle={{
+                color: "hsl(var(--foreground))",
+                fontWeight: "600",
+                marginBottom: "8px",
+              }}
+              itemStyle={{
+                color: "hsl(var(--foreground))",
+                padding: "4px 0",
               }}
             />
           </PieChart>

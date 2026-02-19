@@ -56,6 +56,7 @@ model User {
   @@index([status])
   @@map("user")
   qrentries QREntry[] @relation("QRScanner")
+  userActivities UserActivity[]
 }
 
 model Session {
@@ -444,6 +445,23 @@ model QRScan {
   @@index([scannedById])
   @@index([scannedAt])
   @@map("qr_scan")
+}
+
+model UserActivity {
+  id          String    @id @default(cuid())
+  userId      String
+  date        DateTime  @db.Date
+  hasActivity Boolean   @default(true)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("user_activity")
 }
 
 // ============================================
