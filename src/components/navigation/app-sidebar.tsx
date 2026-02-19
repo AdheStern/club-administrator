@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ActivityIcon,
   AppWindowIcon,
   CommandIcon,
   type LucideIcon,
@@ -62,6 +63,12 @@ const navItems: NavItem[] = [
     url: "/requests",
     icon: AppWindowIcon,
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
+  },
+  {
+    title: "Actividad de Relacionadores",
+    url: "/user-activity",
+    icon: ActivityIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Administración",
