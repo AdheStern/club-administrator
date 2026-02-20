@@ -1,6 +1,6 @@
 // src/components/system/requests/request-card.tsx
-"use client";
 
+"use client";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -9,6 +9,7 @@ import {
   CheckCircle,
   Clock,
   Download,
+  ExternalLink,
   MoreVertical,
   User,
   XCircle,
@@ -27,12 +28,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { downloadRequestQRs, markAsPaid } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import { cn } from "@/lib/utils";
+import { PaymentVoucherUpload } from "./payment-voucher-upload";
 
 interface RequestCardProps {
   request: RequestWithRelations;
@@ -75,9 +75,8 @@ const statusConfig = {
   },
 };
 
-const isValidDate = (date: Date | null | undefined): boolean => {
-  return date instanceof Date && !Number.isNaN(date.getTime());
-};
+const isValidDate = (date: Date | null | undefined): boolean =>
+  date instanceof Date && !Number.isNaN(date.getTime());
 
 export function RequestCard({
   request,
@@ -93,6 +92,9 @@ export function RequestCard({
 }: RequestCardProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [pendingVoucherUrl, setPendingVoucherUrl] = useState<string | null>(
+    null,
+  );
 
   const statusKey = request.status as keyof typeof statusConfig;
   const status = statusConfig[statusKey] || {
@@ -103,13 +105,11 @@ export function RequestCard({
 
   const canBeEdited =
     canEdit && (request.status === "PENDING" || request.status === "OBSERVED");
-
   const canBeManaged =
     canManage &&
     (request.status === "PENDING" ||
       request.status === "OBSERVED" ||
       request.status === "PRE_APPROVED");
-
   const canTransferTable =
     canManage &&
     (request.status === "PENDING" ||
@@ -126,31 +126,23 @@ export function RequestCard({
     : new Date();
   const createdAt = isValidDate(rawCreatedAt) ? rawCreatedAt : new Date();
 
+  const displayedVoucherUrl = request.paymentVoucherUrl ?? pendingVoucherUrl;
+
   const handleDownloadQR = async () => {
     setIsDownloading(true);
     try {
       const result = await downloadRequestQRs(request.id);
-
       if (result.success && result.data) {
-        const blob = new Blob([result.data.qrPDFContent], {
-          type: "text/html",
-        });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${result.data.fileName}.html`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
+        triggerDownload(
+          result.data.qrPDFContent,
+          `${result.data.fileName}.html`,
+        );
         toast.success("Códigos QR descargados correctamente");
       } else {
         toast.error(result.error || "Error al descargar códigos QR");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al descargar códigos QR");
-      console.error("Download error:", error);
     } finally {
       setIsDownloading(false);
     }
@@ -160,27 +152,17 @@ export function RequestCard({
     setIsDownloading(true);
     try {
       const result = await downloadRequestQRs(request.id);
-
-      if (result.success && result.data && result.data.freeQRPDFContent) {
-        const freeBlob = new Blob([result.data.freeQRPDFContent], {
-          type: "text/html",
-        });
-        const freeUrl = URL.createObjectURL(freeBlob);
-        const freeLink = document.createElement("a");
-        freeLink.href = freeUrl;
-        freeLink.download = `${result.data.fileName}-GRATIS.html`;
-        document.body.appendChild(freeLink);
-        freeLink.click();
-        document.body.removeChild(freeLink);
-        URL.revokeObjectURL(freeUrl);
-
+      if (result.success && result.data?.freeQRPDFContent) {
+        triggerDownload(
+          result.data.freeQRPDFContent,
+          `${result.data.fileName}-GRATIS.html`,
+        );
         toast.success("QR de invitado descargado correctamente");
       } else {
         toast.error("No hay QR de invitado disponible");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al descargar QR de invitado");
-      console.error("Download free QR error:", error);
     } finally {
       setIsDownloading(false);
     }
@@ -191,7 +173,10 @@ export function RequestCard({
 
     setIsMarkingPaid(true);
     try {
-      const result = await markAsPaid({ id: request.id });
+      const result = await markAsPaid({
+        id: request.id,
+        paymentVoucherUrl: pendingVoucherUrl ?? undefined,
+      });
 
       if (result.success) {
         toast.success("Solicitud marcada como pagada");
@@ -199,9 +184,8 @@ export function RequestCard({
       } else {
         toast.error(result.error || "Error al marcar como pagada");
       }
-    } catch (error) {
+    } catch {
       toast.error("Error al marcar como pagada");
-      console.error("Mark paid error:", error);
     } finally {
       setIsMarkingPaid(false);
     }
@@ -216,7 +200,13 @@ export function RequestCard({
               {request.event?.name || "Evento sin nombre"}
             </h3>
             <Badge
-              variant={status.variant as any}
+              variant={
+                status.variant as
+                  | "default"
+                  | "outline"
+                  | "secondary"
+                  | "destructive"
+              }
               className={cn("text-xs", status.className)}
             >
               {status.label}
@@ -225,11 +215,7 @@ export function RequestCard({
           {eventDate && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-3 w-3" />
-              <span>
-                {format(eventDate, "dd MMM yyyy", {
-                  locale: es,
-                })}
-              </span>
+              <span>{format(eventDate, "dd MMM yyyy", { locale: es })}</span>
             </div>
           )}
         </div>
@@ -370,14 +356,14 @@ export function RequestCard({
             </div>
 
             {canManage && (
-              <>
-                <Field>
-                  <FieldLabel htmlFor="picture">Picture</FieldLabel>
-                  <Input id="picture" type="file" />
-                  <FieldDescription>
-                    Select a picture to upload.
-                  </FieldDescription>
-                </Field>
+              <div className="space-y-3">
+                <PaymentVoucherUpload
+                  requestId={request.id}
+                  existingVoucherUrl={request.paymentVoucherUrl}
+                  onUploaded={(url) => setPendingVoucherUrl(url)}
+                  disabled={request.isPaid}
+                />
+
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id={`paid-${request.id}`}
@@ -394,13 +380,17 @@ export function RequestCard({
                       : "Marcar como pagado"}
                   </Label>
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}
 
         {request.status === "APPROVED" && (
           <div className="pt-2 border-t space-y-2">
+            {displayedVoucherUrl && (
+              <VoucherPreview url={displayedVoucherUrl} />
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -436,13 +426,56 @@ export function RequestCard({
           {request.createdBy?.phone && (
             <p>Teléfono: {request.createdBy.phone}</p>
           )}
-          <p>
-            {format(createdAt, "dd/MM/yyyy HH:mm", {
-              locale: es,
-            })}
-          </p>
+          <p>{format(createdAt, "dd/MM/yyyy HH:mm", { locale: es })}</p>
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function VoucherPreview({ url }: { url: string }) {
+  const isPdf = url.toLowerCase().endsWith(".pdf");
+
+  if (isPdf) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 rounded-lg border bg-muted px-3 py-2 text-sm text-muted-foreground hover:bg-muted/80 transition-colors"
+      >
+        <ExternalLink className="h-4 w-4 shrink-0" />
+        <span className="truncate">Ver voucher de pago (PDF)</span>
+      </a>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted border-b">
+        Voucher de pago
+      </p>
+      <div className="relative w-full aspect-[4/3] max-h-48">
+        <Image
+          src={url}
+          alt="Voucher de pago"
+          fill
+          className="object-contain"
+          unoptimized
+        />
+      </div>
+    </div>
+  );
+}
+
+function triggerDownload(content: string, fileName: string) {
+  const blob = new Blob([content], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

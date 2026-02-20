@@ -1,4 +1,5 @@
 // src/lib/actions/types/request-types.ts
+
 import type { Decimal } from "@prisma/client/runtime/library";
 
 export interface GuestData {
@@ -38,6 +39,7 @@ export interface PreApproveRequestDTO {
 
 export interface MarkAsPaidDTO {
   id: string;
+  paymentVoucherUrl?: string;
 }
 
 export interface ApproveRequestDTO {
@@ -90,6 +92,7 @@ export interface RequestWithRelations {
   approvedAt: Date | null;
   preApprovedAt: Date | null;
   paidAt: Date | null;
+  paymentVoucherUrl: string | null;
   reviewDuration: number | null;
   createdAt: Date;
   updatedAt: Date;

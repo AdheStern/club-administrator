@@ -162,12 +162,13 @@ class RequestRepository {
     });
   }
 
-  async markAsPaid(id: string) {
+  async markAsPaid(id: string, paymentVoucherUrl?: string) {
     return db.request.update({
       where: { id },
       data: {
         isPaid: true,
         paidAt: new Date(),
+        ...(paymentVoucherUrl && { paymentVoucherUrl }),
         updatedAt: new Date(),
       },
       include: this.getInclude(),
@@ -425,7 +426,10 @@ class RequestService {
         };
       }
 
-      const updated = await this.repository.markAsPaid(dto.id);
+      const updated = await this.repository.markAsPaid(
+        dto.id,
+        dto.paymentVoucherUrl,
+      );
       revalidatePath("/requests");
 
       return {

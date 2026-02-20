@@ -1,5 +1,6 @@
-"use client";
+// src/components/system/requests/manager-action-dialog.tsx
 
+"use client";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -16,37 +17,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   approveRequest,
+  markAsPaid,
   observeRequest,
   preApproveRequest,
   rejectRequest,
 } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
+import { PaymentVoucherUpload } from "./payment-voucher-upload";
 
-interface PreApproveDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  request: RequestWithRelations | null;
-  userId: string;
-  onSuccess: () => void;
-}
-
-interface ApproveDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  request: RequestWithRelations | null;
-  userId: string;
-  onSuccess: () => void;
-}
-
-interface ObserveDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  request: RequestWithRelations | null;
-  userId: string;
-  onSuccess: () => void;
-}
-
-interface RejectDialogProps {
+interface BaseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   request: RequestWithRelations | null;
@@ -60,7 +39,7 @@ export function PreApproveDialog({
   request,
   userId,
   onSuccess,
-}: PreApproveDialogProps) {
+}: BaseDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePreApprove = async () => {
@@ -80,9 +59,8 @@ export function PreApproveDialog({
       } else {
         toast.error(result.error || "Error al pre-aprobar solicitud");
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
-      console.error("Pre-approve error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -102,34 +80,7 @@ export function PreApproveDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Evento:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.event?.name || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Cliente:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.client?.name || "N/A"} - CI:{" "}
-              {request.client?.identityCard || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Solicitante:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.createdBy?.name || "Sistema"}
-              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Total de personas:</p>
-            <p className="text-sm text-muted-foreground">
-              {(request.guestInvitations?.length || 0) + 1}
-            </p>
-          </div>
-        </div>
+        <RequestSummary request={request} />
 
         <DialogFooter>
           <Button
@@ -149,13 +100,92 @@ export function PreApproveDialog({
   );
 }
 
+export function MarkAsPaidDialog({
+  open,
+  onOpenChange,
+  request,
+  onSuccess,
+}: Omit<BaseDialogProps, "userId">) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [voucherUrl, setVoucherUrl] = useState<string | null>(
+    request?.paymentVoucherUrl ?? null,
+  );
+
+  const handleMarkAsPaid = async () => {
+    if (!request) return;
+
+    setIsLoading(true);
+    try {
+      const result = await markAsPaid({
+        id: request.id,
+        paymentVoucherUrl: voucherUrl ?? undefined,
+      });
+
+      if (result.success) {
+        toast.success("Solicitud marcada como pagada");
+        onSuccess();
+        onOpenChange(false);
+      } else {
+        toast.error(result.error || "Error al marcar como pagada");
+      }
+    } catch {
+      toast.error("Ocurrió un error inesperado");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!request) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirmar pago</DialogTitle>
+          <DialogDescription>
+            Adjunte el comprobante de pago y confirme la transacción.
+          </DialogDescription>
+        </DialogHeader>
+
+        <RequestSummary request={request} />
+
+        <div className="py-2">
+          <PaymentVoucherUpload
+            requestId={request.id}
+            existingVoucherUrl={request.paymentVoucherUrl}
+            onUploaded={(url) => setVoucherUrl(url)}
+            disabled={request.isPaid}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleMarkAsPaid}
+            disabled={isLoading || request.isPaid}
+          >
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {request.isPaid ? "Ya pagado" : "Confirmar Pago"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ApproveDialog({
   open,
   onOpenChange,
   request,
   userId,
   onSuccess,
-}: ApproveDialogProps) {
+}: BaseDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleApprove = async () => {
@@ -177,36 +207,21 @@ export function ApproveDialog({
         toast.success("Solicitud aprobada correctamente");
 
         try {
-          const blob = new Blob([result.data.qrPDFContent], {
-            type: "text/html",
-          });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `QR-${request.event.name}-${request.client.name}.html`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+          triggerDownload(
+            result.data.qrPDFContent,
+            `QR-${request.event.name}-${request.client.name}.html`,
+          );
 
           if (result.data.freeQRPDFContent) {
-            const freeBlob = new Blob([result.data.freeQRPDFContent], {
-              type: "text/html",
-            });
-            const freeUrl = URL.createObjectURL(freeBlob);
-            const freeLink = document.createElement("a");
-            freeLink.href = freeUrl;
-            freeLink.download = `QR-${request.event.name}-${request.client.name}-GRATIS.html`;
-            document.body.appendChild(freeLink);
-            freeLink.click();
-            document.body.removeChild(freeLink);
-            URL.revokeObjectURL(freeUrl);
+            triggerDownload(
+              result.data.freeQRPDFContent,
+              `QR-${request.event.name}-${request.client.name}-GRATIS.html`,
+            );
           }
 
           toast.success("Códigos QR descargados automáticamente");
-        } catch (downloadError) {
+        } catch {
           toast.error("Error al descargar los códigos QR");
-          console.error("Download error:", downloadError);
         }
 
         onSuccess();
@@ -214,9 +229,8 @@ export function ApproveDialog({
       } else {
         toast.error(result.error || "Error al aprobar solicitud");
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
-      console.error("Approve error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -242,44 +256,18 @@ export function ApproveDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <RequestSummary request={request} />
+
+        {isPreApproved && (
           <div className="space-y-2">
-            <p className="text-sm font-medium">Evento:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.event?.name || "N/A"}
+            <p className="text-sm font-medium">Estado de pago:</p>
+            <p
+              className={`text-sm font-semibold ${request.isPaid ? "text-green-600" : "text-red-600"}`}
+            >
+              {request.isPaid ? "✓ Pagado" : "✗ No pagado"}
             </p>
           </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Cliente:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.client?.name || "N/A"} - CI:{" "}
-              {request.client?.identityCard || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Solicitante:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.createdBy?.name || "Sistema"}
-              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Total de personas:</p>
-            <p className="text-sm text-muted-foreground">
-              {(request.guestInvitations?.length || 0) + 1}
-            </p>
-          </div>
-          {isPreApproved && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Estado de pago:</p>
-              <p
-                className={`text-sm font-semibold ${request.isPaid ? "text-green-600" : "text-red-600"}`}
-              >
-                {request.isPaid ? "✓ Pagado" : "✗ No pagado"}
-              </p>
-            </div>
-          )}
-        </div>
+        )}
 
         <DialogFooter>
           <Button
@@ -308,7 +296,7 @@ export function ObserveDialog({
   request,
   userId,
   onSuccess,
-}: ObserveDialogProps) {
+}: BaseDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
 
@@ -336,9 +324,8 @@ export function ObserveDialog({
       } else {
         toast.error(result.error || "Error al observar solicitud");
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
-      console.error("Observe error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -362,39 +349,18 @@ export function ObserveDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Evento:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.event?.name || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Cliente:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.client?.name || "N/A"} - CI:{" "}
-              {request.client?.identityCard || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Solicitante:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.createdBy?.name || "Sistema"}
-              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
-            </p>
-          </div>
+        <RequestSummary request={request} />
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notas para el solicitante *</Label>
-            <Textarea
-              id="notes"
-              placeholder="Ej: Falta documento de identidad del invitado #3..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              disabled={isLoading}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="observe-notes">Notas para el solicitante *</Label>
+          <Textarea
+            id="observe-notes"
+            placeholder="Ej: Falta documento de identidad del invitado #3..."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            disabled={isLoading}
+          />
         </div>
 
         <DialogFooter>
@@ -421,7 +387,7 @@ export function RejectDialog({
   request,
   userId,
   onSuccess,
-}: RejectDialogProps) {
+}: BaseDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState("");
 
@@ -449,9 +415,8 @@ export function RejectDialog({
       } else {
         toast.error(result.error || "Error al rechazar solicitud");
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
-      console.error("Reject error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -476,39 +441,18 @@ export function RejectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Evento:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.event?.name || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Cliente:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.client?.name || "N/A"} - CI:{" "}
-              {request.client?.identityCard || "N/A"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Solicitante:</p>
-            <p className="text-sm text-muted-foreground">
-              {request.createdBy?.name || "Sistema"}
-              {request.createdBy?.phone && ` - ${request.createdBy.phone}`}
-            </p>
-          </div>
+        <RequestSummary request={request} />
 
-          <div className="space-y-2">
-            <Label htmlFor="notes">Motivo del rechazo *</Label>
-            <Textarea
-              id="notes"
-              placeholder="Ej: Documentos falsificados detectados..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={4}
-              disabled={isLoading}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="reject-notes">Motivo del rechazo *</Label>
+          <Textarea
+            id="reject-notes"
+            placeholder="Ej: Documentos falsificados detectados..."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            disabled={isLoading}
+          />
         </div>
 
         <DialogFooter>
@@ -531,4 +475,45 @@ export function RejectDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function RequestSummary({ request }: { request: RequestWithRelations }) {
+  return (
+    <div className="space-y-3 py-2">
+      <SummaryRow label="Evento" value={request.event?.name ?? "N/A"} />
+      <SummaryRow
+        label="Cliente"
+        value={`${request.client?.name ?? "N/A"} - CI: ${request.client?.identityCard ?? "N/A"}`}
+      />
+      <SummaryRow
+        label="Solicitante"
+        value={`${request.createdBy?.name ?? "Sistema"}${request.createdBy?.phone ? ` - ${request.createdBy.phone}` : ""}`}
+      />
+      <SummaryRow
+        label="Total de personas"
+        value={String((request.guestInvitations?.length ?? 0) + 1)}
+      />
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium">{label}:</p>
+      <p className="text-sm text-muted-foreground">{value}</p>
+    </div>
+  );
+}
+
+function triggerDownload(content: string, fileName: string) {
+  const blob = new Blob([content], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

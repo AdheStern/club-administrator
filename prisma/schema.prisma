@@ -355,6 +355,7 @@ model Request {
   preApprovedAt       DateTime?
   paidAt              DateTime?
   reviewDuration      Int?
+  paymentVoucherUrl   String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
