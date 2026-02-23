@@ -3,12 +3,21 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Form,
   FormControl,
@@ -20,6 +29,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -28,11 +42,14 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { createPackage, updatePackage } from "@/lib/actions/package-actions";
+import { getSectors } from "@/lib/actions/sector-actions";
 import type {
   CreatePackageDTO,
   PackageWithRelations,
   UpdatePackageDTO,
 } from "@/lib/actions/types/package-types";
+import type { SectorWithRelations } from "@/lib/actions/types/sector-types";
+import { cn } from "@/lib/utils";
 
 const packageFormSchema = z.object({
   name: z
@@ -53,6 +70,7 @@ const packageFormSchema = z.object({
     .min(0, "El precio no puede ser negativo")
     .max(999999.99, "El precio no puede exceder 999,999.99")
     .optional(),
+  sectorIds: z.array(z.string()),
 });
 
 type PackageFormValues = z.infer<typeof packageFormSchema>;
@@ -71,6 +89,8 @@ export function PackageFormDrawer({
   onSuccess,
 }: PackageFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [sectors, setSectors] = useState<SectorWithRelations[]>([]);
+  const [sectorPopoverOpen, setSectorPopoverOpen] = useState(false);
   const isEdit = !!pkg;
 
   const form = useForm<PackageFormValues>({
@@ -81,8 +101,17 @@ export function PackageFormDrawer({
       includedPeople: 4,
       basePrice: 0,
       extraPersonPrice: 0,
+      sectorIds: [],
     },
   });
+
+  useEffect(() => {
+    getSectors({ isActive: true }, { pageSize: 100 }).then((result) => {
+      if (result.success && result.data) {
+        setSectors(result.data.data);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (pkg) {
@@ -94,6 +123,7 @@ export function PackageFormDrawer({
         extraPersonPrice: pkg.extraPersonPrice
           ? Number(pkg.extraPersonPrice)
           : undefined,
+        sectorIds: pkg.packageSectors.map((ps) => ps.sectorId),
       });
     } else {
       form.reset({
@@ -102,9 +132,16 @@ export function PackageFormDrawer({
         includedPeople: 4,
         basePrice: 0,
         extraPersonPrice: 0,
+        sectorIds: [],
       });
     }
   }, [pkg, form]);
+
+  function toggleSector(sectorId: string, current: string[]) {
+    return current.includes(sectorId)
+      ? current.filter((id) => id !== sectorId)
+      : [...current, sectorId];
+  }
 
   async function onSubmit(values: PackageFormValues) {
     setIsLoading(true);
@@ -118,6 +155,7 @@ export function PackageFormDrawer({
           includedPeople: values.includedPeople,
           basePrice: values.basePrice,
           extraPersonPrice: values.extraPersonPrice,
+          sectorIds: values.sectorIds,
         };
 
         const result = await updatePackage(dto);
@@ -136,6 +174,7 @@ export function PackageFormDrawer({
           includedPeople: values.includedPeople,
           basePrice: values.basePrice,
           extraPersonPrice: values.extraPersonPrice,
+          sectorIds: values.sectorIds,
         };
 
         const result = await createPackage(dto);
@@ -148,7 +187,7 @@ export function PackageFormDrawer({
           toast.error(result.error || "Error al crear paquete");
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
     } finally {
       setIsLoading(false);
@@ -271,7 +310,7 @@ export function PackageFormDrawer({
                       {...field}
                       onChange={(e) =>
                         field.onChange(
-                          e.target.value ? Number(e.target.value) : undefined
+                          e.target.value ? Number(e.target.value) : undefined,
                         )
                       }
                       value={field.value ?? ""}
@@ -279,6 +318,99 @@ export function PackageFormDrawer({
                   </FormControl>
                   <FormDescription>
                     Costo adicional por persona extra
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="sectorIds"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sectores disponibles</FormLabel>
+                  <Popover
+                    open={sectorPopoverOpen}
+                    onOpenChange={setSectorPopoverOpen}
+                  >
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between font-normal",
+                            field.value.length === 0 && "text-muted-foreground",
+                          )}
+                        >
+                          {field.value.length === 0
+                            ? "Todos los sectores"
+                            : `${field.value.length} sector${field.value.length > 1 ? "es" : ""} seleccionado${field.value.length > 1 ? "s" : ""}`}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar sector..." />
+                        <CommandList>
+                          <CommandEmpty>
+                            No se encontraron sectores
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {sectors.map((sector) => (
+                              <CommandItem
+                                key={sector.id}
+                                value={sector.name}
+                                onSelect={() => {
+                                  field.onChange(
+                                    toggleSector(sector.id, field.value),
+                                  );
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value.includes(sector.id)
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                {sector.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
+                  {field.value.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {field.value.map((sectorId) => {
+                        const sector = sectors.find((s) => s.id === sectorId);
+                        return sector ? (
+                          <Badge
+                            key={sectorId}
+                            variant="secondary"
+                            className="cursor-pointer"
+                            onClick={() =>
+                              field.onChange(
+                                toggleSector(sectorId, field.value),
+                              )
+                            }
+                          >
+                            {sector.name} ×
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+
+                  <FormDescription>
+                    Sin selección el paquete estará disponible en todos los
+                    sectores
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

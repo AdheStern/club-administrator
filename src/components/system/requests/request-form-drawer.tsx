@@ -49,6 +49,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { getPackagesForSector } from "@/lib/actions/package-actions";
 import {
   createRequest,
   getAvailableTablesForEvent,
@@ -113,7 +114,6 @@ interface RequestFormDrawerProps {
   onOpenChange: (open: boolean) => void;
   request?: RequestWithRelations | null;
   events: EventWithRelations[];
-  packages: PackageWithRelations[];
   userId: string;
   userRole: string;
   onSuccess: () => void;
@@ -135,7 +135,6 @@ export function RequestFormDrawer({
   onOpenChange,
   request,
   events,
-  packages,
   userId,
   userRole,
   onSuccess,
@@ -146,7 +145,11 @@ export function RequestFormDrawer({
     [],
   );
   const [filteredTables, setFilteredTables] = useState<AvailableTable[]>([]);
+  const [availablePackages, setAvailablePackages] = useState<
+    PackageWithRelations[]
+  >([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [loadingPackages, setLoadingPackages] = useState(false);
   const [selectedSector, setSelectedSector] = useState<AvailableSector | null>(
     null,
   );
@@ -218,6 +221,24 @@ export function RequestFormDrawer({
     [userId],
   );
 
+  const loadPackagesForSector = useCallback(async (sectorId: string) => {
+    setLoadingPackages(true);
+    try {
+      const result = await getPackagesForSector(sectorId);
+      if (result.success && result.data) {
+        setAvailablePackages(result.data);
+      } else {
+        setAvailablePackages([]);
+        toast.error(result.error || "Error al cargar paquetes");
+      }
+    } catch {
+      setAvailablePackages([]);
+      toast.error("Error al cargar paquetes");
+    } finally {
+      setLoadingPackages(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedEventId && !isEdit) {
       loadAvailableTables(selectedEventId);
@@ -233,11 +254,19 @@ export function RequestFormDrawer({
         (t) => t.sectorId === selectedSectorId,
       );
       setFilteredTables(tables);
+
+      loadPackagesForSector(selectedSectorId);
     } else {
       setSelectedSector(null);
       setFilteredTables([]);
+      setAvailablePackages([]);
     }
-  }, [selectedSectorId, availableTables, availableSectors]);
+  }, [
+    selectedSectorId,
+    availableTables,
+    availableSectors,
+    loadPackagesForSector,
+  ]);
 
   useEffect(() => {
     if (request) {
@@ -348,7 +377,6 @@ export function RequestFormDrawer({
   const activeEvents = events.filter(
     (e) => e.isActive && new Date(e.eventDate) > new Date(),
   );
-  const activePackages = packages.filter((p) => p.isActive);
 
   const requiresGuestList = selectedSector?.requiresGuestList ?? false;
 
@@ -420,7 +448,9 @@ export function RequestFormDrawer({
                                         field.onChange(event.id);
                                         form.setValue("sectorId", "");
                                         form.setValue("tableId", "");
+                                        form.setValue("packageId", "");
                                         setSelectedSector(null);
+                                        setAvailablePackages([]);
                                         setEventComboboxOpen(false);
                                       }}
                                       className="flex items-center gap-3 p-2"
@@ -479,6 +509,7 @@ export function RequestFormDrawer({
                             onValueChange={(value) => {
                               field.onChange(value);
                               form.setValue("tableId", "");
+                              form.setValue("packageId", "");
                             }}
                             defaultValue={field.value}
                             disabled={loadingTables}
@@ -507,7 +538,8 @@ export function RequestFormDrawer({
                             </SelectContent>
                           </Select>
                           <FormDescription>
-                            Selecciona el sector para filtrar las mesas
+                            Selecciona el sector para filtrar las mesas y
+                            paquetes disponibles
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -515,74 +547,89 @@ export function RequestFormDrawer({
                     />
 
                     {selectedSectorId && (
-                      <FormField
-                        control={form.control}
-                        name="tableId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Mesa</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue
-                                    placeholder={
-                                      filteredTables.length === 0
-                                        ? "No hay mesas disponibles en este sector"
-                                        : "Selecciona una mesa"
-                                    }
-                                  />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {filteredTables.map((table) => (
-                                  <SelectItem key={table.id} value={table.id}>
-                                    {table.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormDescription>
-                              {filteredTables.length} mesa(s) disponible(s) en{" "}
-                              {selectedSector?.name}
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="tableId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Mesa</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue
+                                      placeholder={
+                                        filteredTables.length === 0
+                                          ? "No hay mesas disponibles en este sector"
+                                          : "Selecciona una mesa"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {filteredTables.map((table) => (
+                                    <SelectItem key={table.id} value={table.id}>
+                                      {table.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                {filteredTables.length} mesa(s) disponible(s) en{" "}
+                                {selectedSector?.name}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="packageId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Paquete</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                                disabled={loadingPackages}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue
+                                      placeholder={
+                                        loadingPackages
+                                          ? "Cargando paquetes..."
+                                          : availablePackages.length === 0
+                                            ? "No hay paquetes disponibles en este sector"
+                                            : "Selecciona un paquete"
+                                      }
+                                    />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {availablePackages.map((pkg) => (
+                                    <SelectItem key={pkg.id} value={pkg.id}>
+                                      {pkg.name} — {pkg.includedPeople} personas
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormDescription>
+                                Solo se muestran los paquetes disponibles para{" "}
+                                {selectedSector?.name}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </>
                     )}
                   </>
                 )}
-
-                <FormField
-                  control={form.control}
-                  name="packageId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Paquete</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un paquete" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {activePackages.map((pkg) => (
-                            <SelectItem key={pkg.id} value={pkg.id}>
-                              {pkg.name} - {pkg.includedPeople} personas
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </>
             )}
 

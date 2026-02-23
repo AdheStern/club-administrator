@@ -110,6 +110,24 @@ class PriceValidationStrategy implements ValidationStrategy {
   }
 }
 
+const packageInclude = {
+  _count: {
+    select: {
+      requests: true,
+    },
+  },
+  packageSectors: {
+    include: {
+      sector: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+} as const;
+
 class PackageRepository {
   async create(data: CreatePackageDTO): Promise<PackageWithRelations> {
     const result = await db.package.create({
@@ -122,14 +140,17 @@ class PackageRepository {
         extraPersonPrice: data.extraPersonPrice,
         createdAt: new Date(),
         updatedAt: new Date(),
+        ...(data.sectorIds &&
+          data.sectorIds.length > 0 && {
+            packageSectors: {
+              create: data.sectorIds.map((sectorId) => ({
+                id: crypto.randomUUID(),
+                sectorId,
+              })),
+            },
+          }),
       },
-      include: {
-        _count: {
-          select: {
-            requests: true,
-          },
-        },
-      },
+      include: packageInclude,
     });
 
     return convertDecimalsToNumbers(result) as PackageWithRelations;
@@ -137,29 +158,43 @@ class PackageRepository {
 
   async update(
     id: string,
-    data: Partial<UpdatePackageDTO>
+    data: Partial<UpdatePackageDTO>,
   ): Promise<PackageWithRelations> {
-    const result = await db.package.update({
-      where: { id },
-      data: {
-        ...(data.name && { name: data.name }),
-        ...(data.description !== undefined && {
-          description: data.description,
-        }),
-        ...(data.includedPeople && { includedPeople: data.includedPeople }),
-        ...(data.basePrice && { basePrice: data.basePrice }),
-        ...(data.extraPersonPrice !== undefined && {
-          extraPersonPrice: data.extraPersonPrice,
-        }),
-        updatedAt: new Date(),
-      },
-      include: {
-        _count: {
-          select: {
-            requests: true,
-          },
+    await db.$transaction(async (tx) => {
+      if (data.sectorIds !== undefined) {
+        await tx.packageSector.deleteMany({ where: { packageId: id } });
+
+        if (data.sectorIds.length > 0) {
+          await tx.packageSector.createMany({
+            data: data.sectorIds.map((sectorId) => ({
+              id: crypto.randomUUID(),
+              packageId: id,
+              sectorId,
+            })),
+          });
+        }
+      }
+
+      await tx.package.update({
+        where: { id },
+        data: {
+          ...(data.name && { name: data.name }),
+          ...(data.description !== undefined && {
+            description: data.description,
+          }),
+          ...(data.includedPeople && { includedPeople: data.includedPeople }),
+          ...(data.basePrice && { basePrice: data.basePrice }),
+          ...(data.extraPersonPrice !== undefined && {
+            extraPersonPrice: data.extraPersonPrice,
+          }),
+          updatedAt: new Date(),
         },
-      },
+      });
+    });
+
+    const result = await db.package.findUniqueOrThrow({
+      where: { id },
+      include: packageInclude,
     });
 
     return convertDecimalsToNumbers(result) as PackageWithRelations;
@@ -168,13 +203,7 @@ class PackageRepository {
   async findById(id: string): Promise<PackageWithRelations | null> {
     const result = await db.package.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: {
-            requests: true,
-          },
-        },
-      },
+      include: packageInclude,
     });
 
     if (!result) return null;
@@ -183,7 +212,7 @@ class PackageRepository {
 
   async findMany(
     filters: PackageFilters,
-    pagination: PaginationParams
+    pagination: PaginationParams,
   ): Promise<PaginatedResult<PackageWithRelations>> {
     const {
       page = 1,
@@ -193,13 +222,7 @@ class PackageRepository {
     } = pagination;
     const skip = (page - 1) * pageSize;
 
-    const where: {
-      isActive?: boolean;
-      OR?: Array<{
-        name?: { contains: string; mode: "insensitive" };
-        description?: { contains: string; mode: "insensitive" };
-      }>;
-    } = {};
+    const where: Record<string, unknown> = {};
 
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
@@ -207,12 +230,15 @@ class PackageRepository {
 
     if (filters.search) {
       where.OR = [
-        {
-          name: { contains: filters.search, mode: "insensitive" },
-        },
-        {
-          description: { contains: filters.search, mode: "insensitive" },
-        },
+        { name: { contains: filters.search, mode: "insensitive" } },
+        { description: { contains: filters.search, mode: "insensitive" } },
+      ];
+    }
+
+    if (filters.sectorId) {
+      where.OR = [
+        { packageSectors: { none: {} } },
+        { packageSectors: { some: { sectorId: filters.sectorId } } },
       ];
     }
 
@@ -222,19 +248,13 @@ class PackageRepository {
         skip,
         take: pageSize,
         orderBy: { [sortBy]: sortOrder },
-        include: {
-          _count: {
-            select: {
-              requests: true,
-            },
-          },
-        },
+        include: packageInclude,
       }),
       db.package.count({ where }),
     ]);
 
     const convertedData = data.map((item) =>
-      convertDecimalsToNumbers(item)
+      convertDecimalsToNumbers(item),
     ) as PackageWithRelations[];
 
     return {
@@ -247,15 +267,11 @@ class PackageRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await db.package.delete({
-      where: { id },
-    });
+    await db.package.delete({ where: { id } });
   }
 
   async toggleStatus(id: string): Promise<PackageWithRelations> {
-    const pkg = await db.package.findUnique({
-      where: { id },
-    });
+    const pkg = await db.package.findUnique({ where: { id } });
 
     if (!pkg) {
       throw new Error("Paquete no encontrado");
@@ -267,16 +283,27 @@ class PackageRepository {
         isActive: !pkg.isActive,
         updatedAt: new Date(),
       },
-      include: {
-        _count: {
-          select: {
-            requests: true,
-          },
-        },
-      },
+      include: packageInclude,
     });
 
     return convertDecimalsToNumbers(result) as PackageWithRelations;
+  }
+
+  async findBySector(sectorId: string): Promise<PackageWithRelations[]> {
+    const results = await db.package.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { packageSectors: { none: {} } },
+          { packageSectors: { some: { sectorId } } },
+        ],
+      },
+      include: packageInclude,
+    });
+
+    return results.map(
+      (item) => convertDecimalsToNumbers(item) as PackageWithRelations,
+    );
   }
 }
 
@@ -287,51 +314,35 @@ class PackageService {
   private priceValidation = new PriceValidationStrategy();
 
   async createPackage(
-    dto: CreatePackageDTO
+    dto: CreatePackageDTO,
   ): Promise<ActionResult<PackageWithRelations>> {
     try {
       const nameValidation = await this.nameValidation.validate({
         name: dto.name,
       });
-
-      if (!nameValidation.success) {
-        return nameValidation;
-      }
+      if (!nameValidation.success) return nameValidation;
 
       const peopleValidation = await this.peopleValidation.validate(
-        dto.includedPeople
+        dto.includedPeople,
       );
-
-      if (!peopleValidation.success) {
-        return peopleValidation;
-      }
+      if (!peopleValidation.success) return peopleValidation;
 
       const priceValidation = await this.priceValidation.validate(
-        dto.basePrice
+        dto.basePrice,
       );
-
-      if (!priceValidation.success) {
-        return priceValidation;
-      }
+      if (!priceValidation.success) return priceValidation;
 
       if (dto.extraPersonPrice !== undefined) {
         const extraPriceValidation = await this.priceValidation.validate(
-          dto.extraPersonPrice
+          dto.extraPersonPrice,
         );
-
-        if (!extraPriceValidation.success) {
-          return extraPriceValidation;
-        }
+        if (!extraPriceValidation.success) return extraPriceValidation;
       }
 
       const pkg = await this.repository.create(dto);
-
       revalidatePath("/dashboard/admin/packages");
 
-      return {
-        success: true,
-        data: pkg,
-      };
+      return { success: true, data: pkg };
     } catch (error) {
       return {
         success: false,
@@ -343,11 +354,10 @@ class PackageService {
   }
 
   async updatePackage(
-    dto: UpdatePackageDTO
+    dto: UpdatePackageDTO,
   ): Promise<ActionResult<PackageWithRelations>> {
     try {
       const pkg = await this.repository.findById(dto.id);
-
       if (!pkg) {
         return {
           success: false,
@@ -361,50 +371,34 @@ class PackageService {
           name: dto.name,
           excludeId: dto.id,
         });
-
-        if (!nameValidation.success) {
-          return nameValidation;
-        }
+        if (!nameValidation.success) return nameValidation;
       }
 
       if (dto.includedPeople) {
         const peopleValidation = await this.peopleValidation.validate(
-          dto.includedPeople
+          dto.includedPeople,
         );
-
-        if (!peopleValidation.success) {
-          return peopleValidation;
-        }
+        if (!peopleValidation.success) return peopleValidation;
       }
 
       if (dto.basePrice !== undefined) {
         const priceValidation = await this.priceValidation.validate(
-          dto.basePrice
+          dto.basePrice,
         );
-
-        if (!priceValidation.success) {
-          return priceValidation;
-        }
+        if (!priceValidation.success) return priceValidation;
       }
 
       if (dto.extraPersonPrice !== undefined) {
         const extraPriceValidation = await this.priceValidation.validate(
-          dto.extraPersonPrice
+          dto.extraPersonPrice,
         );
-
-        if (!extraPriceValidation.success) {
-          return extraPriceValidation;
-        }
+        if (!extraPriceValidation.success) return extraPriceValidation;
       }
 
       const updatedPackage = await this.repository.update(dto.id, dto);
-
       revalidatePath("/dashboard/admin/packages");
 
-      return {
-        success: true,
-        data: updatedPackage,
-      };
+      return { success: true, data: updatedPackage };
     } catch (error) {
       return {
         success: false,
@@ -418,11 +412,10 @@ class PackageService {
   }
 
   async getPackageById(
-    id: string
+    id: string,
   ): Promise<ActionResult<PackageWithRelations>> {
     try {
       const pkg = await this.repository.findById(id);
-
       if (!pkg) {
         return {
           success: false,
@@ -431,10 +424,7 @@ class PackageService {
         };
       }
 
-      return {
-        success: true,
-        data: pkg,
-      };
+      return { success: true, data: pkg };
     } catch (error) {
       return {
         success: false,
@@ -447,15 +437,11 @@ class PackageService {
 
   async getPackages(
     filters: PackageFilters = {},
-    pagination: PaginationParams = {}
+    pagination: PaginationParams = {},
   ): Promise<ActionResult<PaginatedResult<PackageWithRelations>>> {
     try {
       const result = await this.repository.findMany(filters, pagination);
-
-      return {
-        success: true,
-        data: result,
-      };
+      return { success: true, data: result };
     } catch (error) {
       return {
         success: false,
@@ -469,7 +455,6 @@ class PackageService {
   async deletePackage(id: string): Promise<ActionResult> {
     try {
       const pkg = await this.repository.findById(id);
-
       if (!pkg) {
         return {
           success: false,
@@ -487,7 +472,6 @@ class PackageService {
       }
 
       await this.repository.delete(id);
-
       revalidatePath("/dashboard/admin/packages");
 
       return { success: true };
@@ -504,7 +488,6 @@ class PackageService {
   async togglePackageStatus(id: string): Promise<ActionResult> {
     try {
       await this.repository.toggleStatus(id);
-
       revalidatePath("/dashboard/admin/packages");
 
       return { success: true };
@@ -516,6 +499,24 @@ class PackageService {
             ? error.message
             : "Error al cambiar estado del paquete",
         code: "TOGGLE_STATUS_ERROR",
+      };
+    }
+  }
+
+  async getPackagesForSector(
+    sectorId: string,
+  ): Promise<ActionResult<PackageWithRelations[]>> {
+    try {
+      const packages = await this.repository.findBySector(sectorId);
+      return { success: true, data: packages };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al obtener paquetes del sector",
+        code: "FETCH_ERROR",
       };
     }
   }
@@ -537,7 +538,7 @@ export async function getPackageById(id: string) {
 
 export async function getPackages(
   filters?: PackageFilters,
-  pagination?: PaginationParams
+  pagination?: PaginationParams,
 ) {
   return packageService.getPackages(filters, pagination);
 }
@@ -548,4 +549,8 @@ export async function deletePackage(id: string) {
 
 export async function togglePackageStatus(id: string) {
   return packageService.togglePackageStatus(id);
+}
+
+export async function getPackagesForSector(sectorId: string) {
+  return packageService.getPackagesForSector(sectorId);
 }

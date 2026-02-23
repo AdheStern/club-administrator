@@ -4,6 +4,8 @@
 
 import {
   DollarSign,
+  Globe,
+  LayoutGrid,
   MoreVertical,
   Package as PackageIcon,
   Users,
@@ -43,11 +45,13 @@ export function PackageCard({
     }).format(numPrice);
   };
 
+  const hasAllSectors = pkg.packageSectors.length === 0;
+
   return (
     <Card
       className={cn(
         "hover:shadow-md transition-all duration-200",
-        !pkg.isActive && "opacity-60"
+        !pkg.isActive && "opacity-60",
       )}
     >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
@@ -126,6 +130,28 @@ export function PackageCard({
             </div>
           </div>
         )}
+
+        <div className="pt-2 border-t space-y-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <LayoutGrid className="h-4 w-4" />
+            <span>Sectores</span>
+          </div>
+
+          {hasAllSectors ? (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Globe className="h-3.5 w-3.5" />
+              <span>Todos los sectores</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {pkg.packageSectors.map((ps) => (
+                <Badge key={ps.id} variant="outline" className="text-xs">
+                  {ps.sector.name}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
