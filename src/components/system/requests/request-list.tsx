@@ -1,7 +1,7 @@
 // src/components/system/requests/request-list.tsx
 "use client";
 
-import { Filter, Plus, Search } from "lucide-react";
+import { Filter, Plus, Search, Ticket } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { EventWithRelations } from "@/lib/actions/types/event-types";
-import type { PackageWithRelations } from "@/lib/actions/types/package-types";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
+import { BulkInvitationDrawer } from "./bulk-invitation-drawer";
 import {
   ApproveDialog,
   ObserveDialog,
@@ -30,7 +30,6 @@ import { TransferTableDialog } from "./transfer-table-dialog";
 interface RequestListProps {
   initialRequests: RequestWithRelations[];
   events: EventWithRelations[];
-  packages: PackageWithRelations[];
   userId: string;
   userRole: string;
   onRefresh: () => void;
@@ -39,7 +38,6 @@ interface RequestListProps {
 export function RequestList({
   initialRequests,
   events,
-  packages,
   userId,
   userRole,
   onRefresh,
@@ -50,6 +48,7 @@ export function RequestList({
   const [selectedRequest, setSelectedRequest] =
     useState<RequestWithRelations | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isBulkInvitationOpen, setIsBulkInvitationOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPreApproveOpen, setIsPreApproveOpen] = useState(false);
   const [isApproveOpen, setIsApproveOpen] = useState(false);
@@ -60,16 +59,13 @@ export function RequestList({
     useState<RequestWithRelations | null>(null);
 
   const isManager = ["MANAGER", "ADMIN", "SUPER_ADMIN"].includes(userRole);
+  const canCreateBulkInvitations = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
   const canCreate = ["USER", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(
     userRole,
   );
 
-  const visibleRequests = useMemo(() => {
-    return initialRequests;
-  }, [initialRequests]);
-
   const filteredRequests = useMemo(() => {
-    return visibleRequests.filter((request) => {
+    return initialRequests.filter((request) => {
       const matchesSearch =
         request.client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         request.client.identityCard
@@ -85,7 +81,7 @@ export function RequestList({
 
       return matchesSearch && matchesStatus && matchesEvent;
     });
-  }, [visibleRequests, searchQuery, statusFilter, eventFilter]);
+  }, [initialRequests, searchQuery, statusFilter, eventFilter]);
 
   const handleView = (request: RequestWithRelations) => {
     setSelectedRequest(request);
@@ -147,12 +143,23 @@ export function RequestList({
                 </p>
               )}
             </div>
-            {canCreate && (
-              <Button onClick={() => setIsFormOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva solicitud
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {canCreateBulkInvitations && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkInvitationOpen(true)}
+                >
+                  <Ticket className="mr-2 h-4 w-4" />
+                  Invitaciones en lote
+                </Button>
+              )}
+              {canCreate && (
+                <Button onClick={() => setIsFormOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nueva solicitud
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -253,12 +260,20 @@ export function RequestList({
         onOpenChange={handleFormClose}
         request={selectedRequest}
         events={upcomingEvents}
-        packages={packages}
         userId={userId}
+        userRole={userRole}
         onSuccess={() => {
           handleSuccess();
           handleFormClose();
         }}
+      />
+
+      <BulkInvitationDrawer
+        open={isBulkInvitationOpen}
+        onOpenChange={setIsBulkInvitationOpen}
+        events={upcomingEvents}
+        userId={userId}
+        onSuccess={handleSuccess}
       />
 
       <RequestDetailsDialog

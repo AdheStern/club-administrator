@@ -51,6 +51,7 @@ class RequestRepository {
         packageId: dto.packageId,
         clientId: client.id,
         createdById: dto.createdById,
+        isInvitation: dto.isInvitation ?? false,
         hasConsumption: dto.hasConsumption,
         extraGuests: dto.extraGuests,
         termsAccepted: dto.termsAccepted,
@@ -92,13 +93,8 @@ class RequestRepository {
       updatedAt: new Date(),
     };
 
-    if (dto.tableId) {
-      updateData.tableId = dto.tableId;
-    }
-
-    if (dto.packageId) {
-      updateData.packageId = dto.packageId;
-    }
+    if (dto.tableId) updateData.tableId = dto.tableId;
+    if (dto.packageId) updateData.packageId = dto.packageId;
 
     const newTable = dto.tableId
       ? await db.table.findUnique({
@@ -108,9 +104,7 @@ class RequestRepository {
       : request.table;
 
     if (newTable?.sector.requiresGuestList && dto.guestList) {
-      await db.guestInvitation.deleteMany({
-        where: { requestId: dto.id },
-      });
+      await db.guestInvitation.deleteMany({ where: { requestId: dto.id } });
 
       for (const guestData of dto.guestList) {
         const guest = await GuestHelper.findOrCreateGuest(guestData);
@@ -195,6 +189,9 @@ class RequestRepository {
       ...(filters.status && { status: filters.status }),
       ...(filters.eventId && { eventId: filters.eventId }),
       ...(filters.createdById && { createdById: filters.createdById }),
+      ...(filters.isInvitation !== undefined && {
+        isInvitation: filters.isInvitation,
+      }),
     };
 
     if (filters.userIds && filters.userIds.length > 0) {
@@ -674,7 +671,7 @@ class RequestService {
       let userIdsFilter: string[] = [];
 
       if (isManager) {
-        // Admins y managers ven todas las solicitudes
+        // managers ven todas las solicitudes
       } else if (isSupervisor) {
         const subordinates = await db.user.findMany({
           where: { managerId: userId },
@@ -857,11 +854,7 @@ class RequestService {
         const user = await db.user.findUnique({
           where: { id: userId },
           include: {
-            userSectors: {
-              select: {
-                sectorId: true,
-              },
-            },
+            userSectors: { select: { sectorId: true } },
           },
         });
 
@@ -878,11 +871,7 @@ class RequestService {
         where: {
           eventId,
           ...(userSectors && {
-            table: {
-              sectorId: {
-                in: userSectors,
-              },
-            },
+            table: { sectorId: { in: userSectors } },
           }),
         },
         include: {
@@ -905,9 +894,7 @@ class RequestService {
           eventId,
           status: { in: ["PENDING", "OBSERVED", "PRE_APPROVED", "APPROVED"] },
         },
-        select: {
-          tableId: true,
-        },
+        select: { tableId: true },
       });
 
       const requestedTableIds = new Set(
@@ -924,14 +911,8 @@ class RequestService {
           requiresGuestList: et.table.sector.requiresGuestList,
         }));
 
-      console.log("Available tables:", availableTables);
-
-      return {
-        success: true,
-        data: availableTables,
-      };
+      return { success: true, data: availableTables };
     } catch (error) {
-      console.error("Error fetching available tables:", error);
       return {
         success: false,
         error:
@@ -1051,10 +1032,7 @@ class RequestService {
 
         return tx.request.update({
           where: { id: dto.id },
-          data: {
-            tableId: dto.newTableId,
-            updatedAt: new Date(),
-          },
+          data: { tableId: dto.newTableId, updatedAt: new Date() },
           include: {
             event: {
               select: {
@@ -1091,10 +1069,7 @@ class RequestService {
               },
             },
             approvedBy: {
-              select: {
-                id: true,
-                name: true,
-              },
+              select: { id: true, name: true },
             },
             guestInvitations: {
               include: { guest: true },

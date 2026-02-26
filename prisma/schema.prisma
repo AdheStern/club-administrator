@@ -363,6 +363,7 @@ model Request {
   createdById         String
   status              String    @default("PENDING")
   hasConsumption      Boolean   @default(false)
+  isInvitation        Boolean   @default(false)
   isPaid              Boolean   @default(false)
   isPreApproved       Boolean   @default(false)
   extraGuests         Int       @default(0)

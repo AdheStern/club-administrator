@@ -20,6 +20,7 @@ export interface CreateRequestDTO {
   extraGuests: number;
   termsAccepted: boolean;
   createdById: string;
+  isInvitation?: boolean;
 }
 
 export interface UpdateRequestDTO {
@@ -69,6 +70,7 @@ export interface RequestFilters {
   eventId?: string;
   createdById?: string;
   userIds?: string[];
+  isInvitation?: boolean;
   search?: string;
   dateFrom?: Date;
   dateTo?: Date;
@@ -82,6 +84,7 @@ export interface RequestWithRelations {
   clientId: string;
   createdById: string;
   status: string;
+  isInvitation: boolean;
   hasConsumption: boolean;
   isPaid: boolean;
   isPreApproved: boolean;
