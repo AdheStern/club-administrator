@@ -1,7 +1,11 @@
+// src/lib/actions/event-actions.ts
+
 "use server";
 
 import { Decimal } from "@prisma/client/runtime/library";
 import { revalidatePath } from "next/cache";
+import { buildBlobName, uploadBlob } from "@/lib/azure/blob-storage";
+import { validateImageFile } from "@/lib/azure/image-validator";
 import { db } from "@/lib/db";
 import { saveFile } from "@/lib/utils/file-upload";
 import { convertDecimalsToNumbers } from "./helpers/decimal-converter";
@@ -193,6 +197,8 @@ class EventRepository {
         eventDate: data.eventDate,
         image: data.image,
         paymentQR: data.paymentQR,
+        ticketArt: data.ticketArt,
+        tableMap: data.tableMap,
         commissionAmount: data.commissionAmount
           ? new Decimal(data.commissionAmount)
           : null,
@@ -270,6 +276,8 @@ class EventRepository {
       ...(data.eventDate && { eventDate: data.eventDate }),
       ...(data.image !== undefined && { image: data.image }),
       ...(data.paymentQR !== undefined && { paymentQR: data.paymentQR }),
+      ...(data.ticketArt !== undefined && { ticketArt: data.ticketArt }),
+      ...(data.tableMap !== undefined && { tableMap: data.tableMap }),
       ...(data.commissionAmount !== undefined && {
         commissionAmount: data.commissionAmount
           ? new Decimal(data.commissionAmount)
@@ -835,6 +843,72 @@ export async function uploadPaymentQR(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Error al subir QR",
+      code: "UPLOAD_ERROR",
+    };
+  }
+}
+
+export async function uploadTicketArt(
+  file: File,
+): Promise<ActionResult<string>> {
+  try {
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      return {
+        success: false,
+        error: validationError.message,
+        code: validationError.code,
+      };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const blobName = buildBlobName(
+      "ticket-art",
+      crypto.randomUUID(),
+      file.name,
+    );
+    const url = await uploadBlob(blobName, buffer, file.type);
+
+    return { success: true, data: url };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Error al subir arte del ticket",
+      code: "UPLOAD_ERROR",
+    };
+  }
+}
+
+export async function uploadTableMap(
+  file: File,
+): Promise<ActionResult<string>> {
+  try {
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      return {
+        success: false,
+        error: validationError.message,
+        code: validationError.code,
+      };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const blobName = buildBlobName(
+      "table-maps",
+      crypto.randomUUID(),
+      file.name,
+    );
+    const url = await uploadBlob(blobName, buffer, file.type);
+
+    return { success: true, data: url };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Error al subir mapa de mesas",
       code: "UPLOAD_ERROR",
     };
   }

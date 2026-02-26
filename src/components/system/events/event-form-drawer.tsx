@@ -1,3 +1,5 @@
+// src/components/system/events/event-form-drawer.tsx
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -40,6 +42,8 @@ import {
   updateEvent,
   uploadEventImage,
   uploadPaymentQR,
+  uploadTableMap,
+  uploadTicketArt,
 } from "@/lib/actions/event-actions";
 import type {
   CreateEventDTO,
@@ -51,6 +55,7 @@ import type { TableWithRelations } from "@/lib/actions/types/table-types";
 import { cn } from "@/lib/utils";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_BLOB_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_IMAGE_TYPES = [
   "image/jpeg",
   "image/jpg",
@@ -69,6 +74,8 @@ const eventFormSchema = z.object({
   }),
   image: z.custom<File>().optional(),
   paymentQR: z.custom<File>().optional(),
+  ticketArt: z.custom<File>().optional(),
+  tableMap: z.custom<File>().optional(),
   commissionAmount: z
     .number()
     .min(0, "La comisión no puede ser negativa")
@@ -106,8 +113,12 @@ export function EventFormDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [paymentQRPreview, setPaymentQRPreview] = useState<string | null>(null);
+  const [ticketArtPreview, setTicketArtPreview] = useState<string | null>(null);
+  const [tableMapPreview, setTableMapPreview] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const paymentQRInputRef = useRef<HTMLInputElement>(null);
+  const ticketArtInputRef = useRef<HTMLInputElement>(null);
+  const tableMapInputRef = useRef<HTMLInputElement>(null);
   const isEdit = !!event;
 
   const form = useForm<EventFormValues>({
@@ -151,6 +162,14 @@ export function EventFormDrawer({
       if (event.paymentQR) {
         setPaymentQRPreview(`/uploads/${event.paymentQR}`);
       }
+      setTicketArtPreview(
+        (event as EventWithRelationsDTO & { ticketArt?: string }).ticketArt ??
+          null,
+      );
+      setTableMapPreview(
+        (event as EventWithRelationsDTO & { tableMap?: string }).tableMap ??
+          null,
+      );
     } else {
       form.reset({
         name: "",
@@ -165,6 +184,8 @@ export function EventFormDrawer({
       });
       setImagePreview(null);
       setPaymentQRPreview(null);
+      setTicketArtPreview(null);
+      setTableMapPreview(null);
     }
   }, [event, form]);
 
@@ -225,6 +246,52 @@ export function EventFormDrawer({
     reader.readAsDataURL(file);
   };
 
+  const handleTicketArtChange = (file: File | undefined) => {
+    if (!file) {
+      setTicketArtPreview(null);
+      return;
+    }
+
+    if (file.size > MAX_BLOB_FILE_SIZE) {
+      toast.error("La imagen no puede superar 10MB");
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Solo se aceptan imágenes JPG, PNG o WebP");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTicketArtPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTableMapChange = (file: File | undefined) => {
+    if (!file) {
+      setTableMapPreview(null);
+      return;
+    }
+
+    if (file.size > MAX_BLOB_FILE_SIZE) {
+      toast.error("La imagen no puede superar 10MB");
+      return;
+    }
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Solo se aceptan imágenes JPG, PNG o WebP");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTableMapPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSelectAllSectors = () => {
     const activeSectors = sectors.filter((s) => s.isActive);
     form.setValue(
@@ -246,6 +313,8 @@ export function EventFormDrawer({
     try {
       let imagePath: string | undefined;
       let paymentQRPath: string | undefined;
+      let ticketArtUrl: string | undefined;
+      let tableMapUrl: string | undefined;
 
       if (values.image) {
         const imageResult = await uploadEventImage(values.image);
@@ -265,6 +334,26 @@ export function EventFormDrawer({
         paymentQRPath = qrResult.data;
       }
 
+      if (values.ticketArt) {
+        const ticketArtResult = await uploadTicketArt(values.ticketArt);
+        if (!ticketArtResult.success) {
+          toast.error(
+            ticketArtResult.error || "Error al subir arte del ticket",
+          );
+          return;
+        }
+        ticketArtUrl = ticketArtResult.data;
+      }
+
+      if (values.tableMap) {
+        const tableMapResult = await uploadTableMap(values.tableMap);
+        if (!tableMapResult.success) {
+          toast.error(tableMapResult.error || "Error al subir mapa de mesas");
+          return;
+        }
+        tableMapUrl = tableMapResult.data;
+      }
+
       if (isEdit && event) {
         const dto: UpdateEventDTO = {
           id: event.id,
@@ -273,6 +362,8 @@ export function EventFormDrawer({
           eventDate: values.eventDate,
           image: imagePath,
           paymentQR: paymentQRPath,
+          ticketArt: ticketArtUrl,
+          tableMap: tableMapUrl,
           commissionAmount: values.commissionAmount,
           freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
@@ -297,6 +388,8 @@ export function EventFormDrawer({
           eventDate: values.eventDate,
           image: imagePath,
           paymentQR: paymentQRPath,
+          ticketArt: ticketArtUrl,
+          tableMap: tableMapUrl,
           commissionAmount: values.commissionAmount,
           freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
@@ -503,6 +596,138 @@ export function EventFormDrawer({
                   </FormControl>
                   <FormDescription>
                     Código QR para pagos del evento (máx. 5MB)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="ticketArt"
+              render={({ field: { value, ...field } }) => (
+                <FormItem>
+                  <FormLabel>Arte del ticket (opcional)</FormLabel>
+                  <FormControl>
+                    <div className="space-y-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={ticketArtInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          field.onChange(file);
+                          handleTicketArtChange(file);
+                        }}
+                      />
+                      {ticketArtPreview ? (
+                        <div className="relative w-full aspect-video rounded-lg overflow-hidden border">
+                          <Image
+                            src={ticketArtPreview}
+                            alt="Arte del ticket"
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2"
+                            onClick={() => {
+                              field.onChange(undefined);
+                              setTicketArtPreview(null);
+                              if (ticketArtInputRef.current) {
+                                ticketArtInputRef.current.value = "";
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => ticketArtInputRef.current?.click()}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Subir arte del ticket
+                        </Button>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Diseño gráfico que se mostrará en los tickets generados
+                    (JPG, PNG o WebP, máx. 10MB)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="tableMap"
+              render={({ field: { value, ...field } }) => (
+                <FormItem>
+                  <FormLabel>Mapa de mesas (opcional)</FormLabel>
+                  <FormControl>
+                    <div className="space-y-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={tableMapInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          field.onChange(file);
+                          handleTableMapChange(file);
+                        }}
+                      />
+                      {tableMapPreview ? (
+                        <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden border">
+                          <Image
+                            src={tableMapPreview}
+                            alt="Mapa de mesas"
+                            fill
+                            className="object-contain bg-muted"
+                            unoptimized
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2"
+                            onClick={() => {
+                              field.onChange(undefined);
+                              setTableMapPreview(null);
+                              if (tableMapInputRef.current) {
+                                tableMapInputRef.current.value = "";
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => tableMapInputRef.current?.click()}
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Subir mapa de mesas
+                        </Button>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Plano visual del salón con la ubicación de las mesas (JPG,
+                    PNG o WebP, máx. 10MB)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

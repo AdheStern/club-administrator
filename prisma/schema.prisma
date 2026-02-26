@@ -280,6 +280,8 @@ model Event {
   description           String?
   eventDate             DateTime
   image                 String?
+  ticketArt             String?
+  tableMap              String?
   paymentQR             String?
   commissionAmount      Decimal?  @db.Decimal(10, 2)
   freeInvitationQRCount Int       @default(0)

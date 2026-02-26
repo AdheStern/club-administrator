@@ -1,7 +1,6 @@
 // src/lib/actions/types/event-types.ts
 
 import type { Event } from "@prisma/client";
-import type { Decimal } from "@prisma/client/runtime/library";
 
 export interface CreateEventDTO {
   name: string;
@@ -9,6 +8,8 @@ export interface CreateEventDTO {
   eventDate: Date;
   image?: string;
   paymentQR?: string;
+  ticketArt?: string;
+  tableMap?: string;
   commissionAmount?: number;
   freeInvitationQRCount?: number;
   visibilityStart: Date;
@@ -24,6 +25,8 @@ export interface UpdateEventDTO {
   eventDate?: Date;
   image?: string;
   paymentQR?: string;
+  ticketArt?: string;
+  tableMap?: string;
   commissionAmount?: number;
   freeInvitationQRCount?: number;
   visibilityStart?: Date;
