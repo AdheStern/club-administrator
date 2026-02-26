@@ -1113,6 +1113,53 @@ class RequestService {
       };
     }
   }
+
+  async cancelRequest(
+    requestId: string,
+  ): Promise<ActionResult<{ requestId: string }>> {
+    try {
+      const request = await this.repository.findById(requestId);
+
+      if (!request) {
+        return {
+          success: false,
+          error: "Solicitud no encontrada",
+          code: "NOT_FOUND",
+        };
+      }
+
+      if (request.status === "REJECTED") {
+        return {
+          success: false,
+          error: "No se puede cancelar una solicitud ya rechazada",
+          code: "INVALID_STATUS",
+        };
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.qREntry.deleteMany({ where: { requestId } });
+
+        await tx.guestInvitation.deleteMany({ where: { requestId } });
+
+        await tx.eventTable.updateMany({
+          where: { eventId: request.eventId, tableId: request.tableId },
+          data: { isBooked: false },
+        });
+
+        await tx.request.delete({ where: { id: requestId } });
+      });
+
+      revalidatePath("/requests");
+
+      return { success: true, data: { requestId } };
+    } catch {
+      return {
+        success: false,
+        error: "Error al cancelar la reserva",
+        code: "CANCEL_ERROR",
+      };
+    }
+  }
 }
 
 const requestService = new RequestService();
@@ -1183,4 +1230,8 @@ export async function getAvailableTablesForEvent(
 
 export async function transferTable(dto: TransferTableDTO) {
   return requestService.transferTable(dto);
+}
+
+export async function cancelRequest(requestId: string) {
+  return requestService.cancelRequest(requestId);
 }
