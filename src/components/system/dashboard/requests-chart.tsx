@@ -1,91 +1,151 @@
 // src/components/system/dashboard/requests-chart.tsx
+
 "use client";
 
-import { BarChart3 } from "lucide-react";
+import { TrendingUp } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import type { RequestsByMonth } from "@/lib/actions/dashboard-actions";
 
 interface RequestsChartProps {
   data: RequestsByMonth[];
 }
 
+const chartConfig = {
+  count: {
+    label: "Total",
+    color: "#6366f1",
+  },
+  approved: {
+    label: "Aprobadas",
+    color: "#10b981",
+  },
+  rejected: {
+    label: "Rechazadas",
+    color: "#ef4444",
+  },
+} satisfies ChartConfig;
+
 export function RequestsChart({ data }: RequestsChartProps) {
   return (
     <Card className="hover:shadow-lg transition-all">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-primary" />
+          <TrendingUp className="h-5 w-5 text-primary" />
           Solicitudes por Mes
         </CardTitle>
+        <CardDescription>
+          Evolución mensual de solicitudes totales, aprobadas y rechazadas
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+        <ChartContainer config={chartConfig} className="min-h-[350px] w-full">
+          <AreaChart
+            accessibilityLayer
+            data={data}
+            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor="var(--color-count)"
+                  stopOpacity={0.3}
+                />
+                <stop
+                  offset="95%"
+                  stopColor="var(--color-count)"
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+              <linearGradient id="fillApproved" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor="var(--color-approved)"
+                  stopOpacity={0.3}
+                />
+                <stop
+                  offset="95%"
+                  stopColor="var(--color-approved)"
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+              <linearGradient id="fillRejected" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor="var(--color-rejected)"
+                  stopOpacity={0.3}
+                />
+                <stop
+                  offset="95%"
+                  stopColor="var(--color-rejected)"
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
               dataKey="month"
-              stroke="#888888"
-              fontSize={12}
               tickLine={false}
               axisLine={false}
+              tickMargin={8}
+              fontSize={12}
             />
             <YAxis
-              stroke="#888888"
-              fontSize={12}
               tickLine={false}
               axisLine={false}
+              fontSize={12}
+              tickMargin={8}
+              width={32}
             />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "hsl(var(--background))",
-                border: "2px solid hsl(var(--border))",
-                borderRadius: "0.5rem",
-                padding: "12px",
-                boxShadow:
-                  "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-              }}
-              labelStyle={{
-                color: "hsl(var(--foreground))",
-                fontWeight: "600",
-                marginBottom: "8px",
-              }}
-              itemStyle={{
-                color: "hsl(var(--foreground))",
-                padding: "4px 0",
-              }}
-              cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent indicator="dot" />}
             />
-            <Legend />
-            <Bar
+            <ChartLegend content={<ChartLegendContent />} />
+            <Area
+              type="monotone"
               dataKey="count"
-              name="Total"
-              fill="hsl(var(--primary))"
-              radius={[8, 8, 0, 0]}
+              stroke="var(--color-count)"
+              fill="url(#fillCount)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 5 }}
             />
-            <Bar
+            <Area
+              type="monotone"
               dataKey="approved"
-              name="Aprobadas"
-              fill="#10b981"
-              radius={[8, 8, 0, 0]}
+              stroke="var(--color-approved)"
+              fill="url(#fillApproved)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 5 }}
             />
-            <Bar
+            <Area
+              type="monotone"
               dataKey="rejected"
-              name="Rechazadas"
-              fill="#ef4444"
-              radius={[8, 8, 0, 0]}
+              stroke="var(--color-rejected)"
+              fill="url(#fillRejected)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 5 }}
             />
-          </BarChart>
-        </ResponsiveContainer>
+          </AreaChart>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

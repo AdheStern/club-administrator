@@ -1,18 +1,17 @@
 // src/components/system/dashboard/user-performance-card.tsx
+
 "use client";
 
-import { CheckCircle, Clock, DollarSign, TrendingUp, User } from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { CheckCircle, Clock, DollarSign, TrendingUp } from "lucide-react";
+import { Area, AreaChart, XAxis } from "recharts";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
 import type { UserPerformance } from "@/lib/actions/dashboard-actions";
 import { cn } from "@/lib/utils";
@@ -21,22 +20,27 @@ interface UserPerformanceCardProps {
   data: UserPerformance;
 }
 
+const revenueChartConfig = {
+  revenue: {
+    label: "Ingresos",
+    color: "#6366f1",
+  },
+} satisfies ChartConfig;
+
 export function UserPerformanceCard({ data }: UserPerformanceCardProps) {
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (name: string) =>
+    name
       .split(" ")
       .map((n) => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
-  };
 
-  const formatCurrency = (value: number) => {
-    return `Bs. ${value.toLocaleString("es-BO", {
+  const formatCurrency = (value: number) =>
+    `Bs. ${value.toLocaleString("es-BO", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     })}`;
-  };
 
   const getResponseTimeColor = (hours: number) => {
     if (hours <= 12) return "text-green-600";
@@ -61,7 +65,7 @@ export function UserPerformanceCard({ data }: UserPerformanceCardProps) {
                 {data.userName}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {data.requestsCreated} solicitudes
+                {data.requestsCreated} solicitudes creadas
               </p>
             </div>
           </div>
@@ -92,7 +96,9 @@ export function UserPerformanceCard({ data }: UserPerformanceCardProps) {
           <div className="p-2 rounded-lg border bg-muted/50">
             <div className="flex items-center gap-1.5 mb-1">
               <Clock className="h-3.5 w-3.5 text-blue-600" />
-              <span className="text-xs text-muted-foreground">Tiempo</span>
+              <span className="text-xs text-muted-foreground">
+                T. Respuesta
+              </span>
             </div>
             <p
               className={cn(
@@ -120,11 +126,18 @@ export function UserPerformanceCard({ data }: UserPerformanceCardProps) {
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="h-3.5 w-3.5 text-primary" />
               <span className="text-xs font-medium text-muted-foreground">
-                Últimos 3 Meses
+                Ingresos — Últimos 3 Meses
               </span>
             </div>
-            <ResponsiveContainer width="100%" height={80}>
-              <AreaChart data={chartData}>
+            <ChartContainer
+              config={revenueChartConfig}
+              className="min-h-[80px] w-full"
+            >
+              <AreaChart
+                accessibilityLayer
+                data={chartData}
+                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              >
                 <defs>
                   <linearGradient
                     id={`gradient-${data.userId}`}
@@ -135,41 +148,45 @@ export function UserPerformanceCard({ data }: UserPerformanceCardProps) {
                   >
                     <stop
                       offset="5%"
-                      stopColor="hsl(var(--primary))"
-                      stopOpacity={0.3}
+                      stopColor="var(--color-revenue)"
+                      stopOpacity={0.35}
                     />
                     <stop
                       offset="95%"
-                      stopColor="hsl(var(--primary))"
-                      stopOpacity={0}
+                      stopColor="var(--color-revenue)"
+                      stopOpacity={0.02}
                     />
                   </linearGradient>
                 </defs>
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 10 }}
                   tickLine={false}
                   axisLine={false}
+                  tick={{ fontSize: 10 }}
+                  tickMargin={4}
                 />
-                <YAxis hide />
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  contentStyle={{
-                    fontSize: "12px",
-                    backgroundColor: "hsl(var(--background))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "0.5rem",
-                  }}
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value) => [
+                        formatCurrency(value as number),
+                        "Ingresos",
+                      ]}
+                      hideLabel
+                    />
+                  }
                 />
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--color-revenue)"
                   fill={`url(#gradient-${data.userId})`}
                   strokeWidth={2}
+                  dot={false}
                 />
               </AreaChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
         )}
       </CardContent>

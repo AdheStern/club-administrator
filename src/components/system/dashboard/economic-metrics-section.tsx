@@ -1,4 +1,5 @@
 // src/components/system/dashboard/economic-metrics-section.tsx
+
 "use client";
 
 import {
@@ -8,32 +9,69 @@ import {
   Percent,
   TrendingUp,
 } from "lucide-react";
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from "recharts";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import type {
   DashboardStats,
   EconomicMetrics,
 } from "@/lib/actions/dashboard-actions";
-import { cn } from "@/lib/utils";
 
 interface EconomicMetricsSectionProps {
   stats: DashboardStats;
   economicMetrics: EconomicMetrics;
 }
 
-const COLORS = ["#10b981", "#60a5fa", "#f59e0b", "#8b5cf6", "#ec4899"];
+const SECTOR_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ec4899", "#3b82f6"];
 
 export function EconomicMetricsSection({
   stats,
   economicMetrics,
 }: EconomicMetricsSectionProps) {
-  const formatCurrency = (value: number) => {
-    return `Bs. ${value.toLocaleString("es-BO", {
+  const formatCurrency = (value: number) =>
+    `Bs. ${value.toLocaleString("es-BO", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-  };
+
+  const formatCurrencyShort = (value: number) =>
+    `Bs. ${value.toLocaleString("es-BO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+
+  const sectorData = economicMetrics.revenueBySector
+    .slice(0, 5)
+    .map((s, i) => ({
+      name: s.sectorName,
+      revenue: s.revenue,
+      fill: SECTOR_COLORS[i % SECTOR_COLORS.length],
+    }));
+
+  const sectorChartConfig = sectorData.reduce(
+    (acc, sector, i) => {
+      acc[`sector_${i}`] = {
+        label: sector.name,
+        color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+      };
+      return acc;
+    },
+    { revenue: { label: "Ingresos" } } as ChartConfig,
+  );
+
+  const maxPackageRevenue = economicMetrics.revenueByPackage[0]?.revenue || 1;
 
   return (
     <div className="space-y-4">
@@ -43,6 +81,7 @@ export function EconomicMetricsSection({
       </div>
 
       <div className="grid gap-6 grid-cols-12 auto-rows-auto">
+        {/* Ingresos Totales */}
         <Card className="col-span-12 md:col-span-5 hover:shadow-lg transition-all border-l-4 border-l-green-500">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
@@ -108,124 +147,111 @@ export function EconomicMetricsSection({
           </CardContent>
         </Card>
 
+        {/* Ingresos por Sector — BarChart horizontal con shadcn */}
         <Card className="col-span-12 md:col-span-7 hover:shadow-lg transition-all">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Ingresos por Sector
             </CardTitle>
+            <CardDescription>Top 5 sectores por ingreso total</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
+            <ChartContainer
+              config={sectorChartConfig}
+              className="min-h-[220px] w-full"
+            >
               <BarChart
-                data={economicMetrics.revenueBySector.slice(0, 5)}
+                accessibilityLayer
+                data={sectorData}
                 layout="vertical"
+                margin={{ left: 0, right: 60, top: 4, bottom: 4 }}
               >
-                <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--background))",
-                    border: "2px solid hsl(var(--border))",
-                    borderRadius: "0.5rem",
-                    padding: "12px",
-                    boxShadow:
-                      "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
-                  }}
-                  labelStyle={{
-                    color: "hsl(var(--foreground))",
-                    fontWeight: "600",
-                    marginBottom: "8px",
-                  }}
-                  itemStyle={{
-                    color: "hsl(var(--foreground))",
-                    padding: "4px 0",
-                  }}
-                  cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={12}
+                  width={80}
+                  tickFormatter={(v: string) =>
+                    v.length > 10 ? `${v.slice(0, 10)}…` : v
+                  }
+                />
+                <XAxis dataKey="revenue" type="number" hide />
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value) => [
+                        formatCurrencyShort(value as number),
+                        "Ingresos",
+                      ]}
+                      hideLabel
+                    />
+                  }
                 />
                 <Bar dataKey="revenue" radius={[0, 8, 8, 0]}>
-                  {economicMetrics.revenueBySector
-                    .slice(0, 5)
-                    .map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
+                  {sectorData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                  <LabelList
+                    dataKey="revenue"
+                    position="right"
+                    fontSize={11}
+                    formatter={(v: number) => formatCurrencyShort(v)}
+                    className="fill-foreground"
+                  />
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
-
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {economicMetrics.revenueBySector
-                .slice(0, 4)
-                .map((sector, index) => (
-                  <div
-                    key={sector.sectorId}
-                    className="flex items-center gap-2 p-2 rounded-lg border"
-                  >
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">
-                        {sector.sectorName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatCurrency(sector.revenue)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-            </div>
+            </ChartContainer>
           </CardContent>
         </Card>
 
+        {/* Funnel por Paquete */}
         <Card className="col-span-12 md:col-span-6 hover:shadow-lg transition-all">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Embudo de Conversión por Paquete
             </CardTitle>
+            <CardDescription>
+              Ingresos relativos entre paquetes disponibles
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {economicMetrics.revenueByPackage.map((pkg, index) => {
-                const maxRevenue =
-                  economicMetrics.revenueByPackage[0]?.revenue || 1;
-                const percentage = (pkg.revenue / maxRevenue) * 100;
+                const percentage = (pkg.revenue / maxPackageRevenue) * 100;
+                const color = SECTOR_COLORS[index % SECTOR_COLORS.length];
 
                 return (
-                  <div key={pkg.packageId} className="space-y-2">
+                  <div key={pkg.packageId} className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{
-                            backgroundColor: COLORS[index % COLORS.length],
-                          }}
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: color }}
                         />
-                        <span className="font-medium truncate">
+                        <span className="font-medium truncate max-w-[140px]">
                           {pkg.packageName}
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {pkg.requestCount} sol.
                       </span>
                     </div>
 
-                    <div className="relative">
+                    <div className="relative h-10 bg-muted rounded-lg overflow-hidden">
                       <div
-                        className="h-12 rounded-lg transition-all flex items-center justify-between px-4"
+                        className="h-full rounded-lg flex items-center justify-between px-3 transition-all duration-500"
                         style={{
-                          width: `${percentage}%`,
-                          backgroundColor: COLORS[index % COLORS.length],
-                          opacity: 0.9,
-                          minWidth: "40%",
+                          width: `${Math.max(percentage, 15)}%`,
+                          backgroundColor: color,
                         }}
                       >
-                        <span className="text-white text-sm font-semibold truncate">
-                          {formatCurrency(pkg.revenue)}
+                        <span className="text-white text-xs font-semibold truncate">
+                          {formatCurrencyShort(pkg.revenue)}
                         </span>
-                        <span className="text-white text-xs font-medium">
+                        <span className="text-white text-xs font-medium ml-1 shrink-0">
                           {percentage.toFixed(0)}%
                         </span>
                       </div>
@@ -244,6 +270,7 @@ export function EconomicMetricsSection({
           </CardContent>
         </Card>
 
+        {/* Top Eventos */}
         <Card className="col-span-12 md:col-span-6 hover:shadow-lg transition-all">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -259,13 +286,15 @@ export function EconomicMetricsSection({
                   className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
                 >
                   <div
-                    className={cn(
-                      "flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm",
-                      index === 0 && "bg-yellow-500 text-white",
-                      index === 1 && "bg-gray-400 text-white",
-                      index === 2 && "bg-orange-600 text-white",
-                      index > 2 && "bg-muted text-muted-foreground",
-                    )}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${
+                      index === 0
+                        ? "bg-yellow-500 text-white"
+                        : index === 1
+                          ? "bg-gray-400 text-white"
+                          : index === 2
+                            ? "bg-orange-600 text-white"
+                            : "bg-muted text-muted-foreground"
+                    }`}
                   >
                     {index + 1}
                   </div>
@@ -277,7 +306,7 @@ export function EconomicMetricsSection({
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-green-600">
-                      {formatCurrency(event.revenue)}
+                      {formatCurrencyShort(event.revenue)}
                     </p>
                   </div>
                 </div>
