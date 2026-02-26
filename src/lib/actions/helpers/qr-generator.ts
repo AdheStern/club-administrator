@@ -3406,11 +3406,71 @@ function buildPassportHTML(params: {
 
   @media (max-width: 580px) {
     :root {
-      --passport-w: calc(100vw - 40px);
-      --passport-h: calc((100vw - 40px) * 1.37);
+      --passport-w: calc(100vw - 32px);
+      --passport-h: auto;
     }
+
+    body {
+      padding: 20px 16px 100px;
+    }
+
+    .passport-wrapper {
+      height: auto;
+      perspective: none;
+    }
+
+    .passport-book {
+      height: auto;
+    }
+
+    .passport-cover,
+    .passport-page {
+      position: relative !important;
+      height: auto !important;
+      min-height: 480px;
+      inset: auto;
+    }
+
+    .passport-cover {
+      min-height: 360px;
+    }
+
+    .visa-body {
+      padding: 14px 16px;
+      gap: 12px;
+    }
+
     .visa-fields { grid-template-columns: 1fr; }
+
     .visa-stamp-circle { display: none; }
+    .visa-stamp-exclusive { display: none; }
+    .visa-stamp-discretion { display: none; }
+
+    .visa-qr-img {
+      width: 180px;
+      height: 180px;
+    }
+
+    .visa-title {
+      font-size: 17px;
+    }
+
+    .page-watermark {
+      font-size: 32px;
+    }
+
+    .mrz-line {
+      font-size: 8px;
+    }
+
+    .nav-controls {
+      gap: 10px;
+    }
+
+    .print-btn {
+      padding: 12px 18px;
+      font-size: 10px;
+    }
   }
 </style>
 </head>
