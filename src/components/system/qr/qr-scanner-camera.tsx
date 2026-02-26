@@ -1,9 +1,9 @@
+// src/components/system/qr/qr-scanner-camera.tsx
 "use client";
 
 import { Html5Qrcode } from "html5-qrcode";
 import { AlertTriangle, Camera, KeyboardIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,8 +91,7 @@ export function QRScanner({ userId }: QRScannerProps) {
         setCameraError("Permiso de cámara denegado");
         setShowManualInput(true);
       }
-    } catch (err) {
-      console.log("Permission API not supported, trying direct access");
+    } catch {
       await startCamera();
     }
   }
@@ -104,8 +103,7 @@ export function QRScanner({ userId }: QRScannerProps) {
       stream.getTracks().forEach((track) => track.stop());
       setCameraPermission("granted");
       await startCamera();
-    } catch (err) {
-      console.error("Permission denied:", err);
+    } catch {
       setCameraPermission("denied");
       setCameraError("Permiso de cámara denegado");
       setShowManualInput(true);
@@ -119,21 +117,13 @@ export function QRScanner({ userId }: QRScannerProps) {
       const html5QrCode = new Html5Qrcode("qr-reader");
       html5QrCodeRef.current = html5QrCode;
 
-      const config = {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0,
-      };
-
       await html5QrCode.start(
         { facingMode: "environment" },
-        config,
+        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
         async (decodedText) => {
           if (!mounted || processingRef.current) return;
-
           processingRef.current = true;
           await handleQRScan(decodedText);
-
           setTimeout(() => {
             processingRef.current = false;
           }, 2000);
@@ -143,7 +133,6 @@ export function QRScanner({ userId }: QRScannerProps) {
 
       setCameraError(null);
     } catch (err) {
-      console.error("Error starting camera:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Error desconocido";
 
@@ -167,9 +156,7 @@ export function QRScanner({ userId }: QRScannerProps) {
     return () => {
       mounted = false;
       if (html5QrCodeRef.current) {
-        html5QrCodeRef.current
-          .stop()
-          .catch((err) => console.error("Error stopping camera:", err));
+        html5QrCodeRef.current.stop().catch(() => {});
       }
     };
   }
@@ -183,7 +170,7 @@ export function QRScanner({ userId }: QRScannerProps) {
       const result = await scanQR(code.trim(), userId);
 
       if (result.success && result.data) {
-        const scanResult: ScanResult = {
+        setLastResult({
           success: true,
           guest: result.data.guest,
           event: result.data.request.event,
@@ -191,12 +178,9 @@ export function QRScanner({ userId }: QRScannerProps) {
           package: result.data.request.package,
           scannedBy: result.data.scannedBy,
           usedAt: result.data.usedAt,
-        };
-
-        setLastResult(scanResult);
-        toast.success(`✓ ${result.data.guest.name}`);
+        });
       } else {
-        const errorResult: ScanResult = {
+        setLastResult({
           success: false,
           guest: result.data?.guest || {
             name: "Desconocido",
@@ -215,20 +199,18 @@ export function QRScanner({ userId }: QRScannerProps) {
           errorCode: result.code,
           ...(result.data?.scannedBy && { scannedBy: result.data.scannedBy }),
           ...(result.data?.usedAt && { usedAt: result.data.usedAt }),
-        };
-
-        setLastResult(errorResult);
-
-        if (result.code === "ALREADY_USED") {
-          toast.error("⏰ Código ya utilizado");
-        } else if (result.code === "INVALID_QR") {
-          toast.error("✗ Código no válido");
-        } else {
-          toast.error(result.error || "Error al validar");
-        }
+        });
       }
-    } catch (error) {
-      toast.error("Error inesperado");
+    } catch {
+      setLastResult({
+        success: false,
+        guest: { name: "Error", identityCard: "" },
+        event: { name: "", eventDate: new Date() },
+        table: { name: "", sector: { name: "" } },
+        package: { name: "" },
+        errorMessage: "Error inesperado al procesar el código",
+        errorCode: "UNKNOWN_ERROR",
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -279,11 +261,7 @@ export function QRScanner({ userId }: QRScannerProps) {
           </form>
         </div>
 
-        {lastResult && (
-          <div className="overflow-auto">
-            <QRScanResult result={lastResult} />
-          </div>
-        )}
+        {lastResult && <QRScanResult result={lastResult} />}
       </div>
     );
   }
@@ -313,8 +291,11 @@ export function QRScanner({ userId }: QRScannerProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)] max-h-screen">
-      <div className="flex-[2] relative bg-black rounded-t-lg overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-12rem)]">
+      <div
+        className="relative bg-black rounded-t-lg overflow-hidden"
+        style={{ flex: "0 0 60%" }}
+      >
         <div id="qr-reader" className="w-full h-full" />
 
         {cameraError && (
@@ -339,7 +320,7 @@ export function QRScanner({ userId }: QRScannerProps) {
           </div>
         )}
 
-        <div className="absolute bottom-4 right-4">
+        <div className="absolute bottom-4 right-4 z-10">
           <Button
             size="icon"
             variant={showManualInput ? "default" : "secondary"}
@@ -351,7 +332,7 @@ export function QRScanner({ userId }: QRScannerProps) {
         </div>
 
         {showManualInput && (
-          <div className="absolute bottom-20 left-4 right-4 bg-background rounded-lg p-4 shadow-xl border">
+          <div className="absolute bottom-20 left-4 right-4 z-10 bg-background rounded-lg p-4 shadow-xl border">
             <form onSubmit={handleManualSubmit} className="flex gap-2">
               <Input
                 ref={manualInputRef}
@@ -366,15 +347,21 @@ export function QRScanner({ userId }: QRScannerProps) {
                 disabled={!manualCode.trim() || isProcessing}
                 className="h-12"
               >
-                Validar
+                {isProcessing ? "..." : "Validar"}
               </Button>
             </form>
           </div>
         )}
       </div>
 
-      <div className="flex-1 overflow-auto">
-        {lastResult && <QRScanResult result={lastResult} />}
+      <div className="overflow-auto" style={{ flex: "0 0 40%" }}>
+        {lastResult ? (
+          <QRScanResult result={lastResult} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            Apunta la cámara a un código QR
+          </div>
+        )}
       </div>
     </div>
   );
