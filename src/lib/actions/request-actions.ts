@@ -509,7 +509,11 @@ class RequestService {
           },
         );
 
-        qrPDFContent = await QRGenerator.generateQRPDFContent(qrEntries);
+        qrPDFContent = await QRGenerator.generateQRPDFContent(
+          qrEntries,
+          (updated.event as typeof updated.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       } else {
         const anonymousQRs = await QRGenerator.createAnonymousQREntries(
           dto.id,
@@ -522,8 +526,11 @@ class RequestService {
           },
         );
 
-        qrPDFContent =
-          await QRGenerator.generateAnonymousQRPDFContent(anonymousQRs);
+        qrPDFContent = await QRGenerator.generateAnonymousQRPDFContent(
+          anonymousQRs,
+          (updated.event as typeof updated.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       }
 
       if (updated.event.freeInvitationQRCount > 0) {
@@ -538,7 +545,11 @@ class RequestService {
           },
         );
 
-        freeQRPDFContent = await QRGenerator.generateFreeQRPDFContent(freeQRs);
+        freeQRPDFContent = await QRGenerator.generateFreeQRPDFContent(
+          freeQRs,
+          (updated.event as typeof updated.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       }
 
       revalidatePath("/requests");
@@ -778,7 +789,11 @@ class RequestService {
             sectorName: request.table.sector.name,
           }));
 
-        qrPDFContent = await QRGenerator.generateQRPDFContent(qrData);
+        qrPDFContent = await QRGenerator.generateQRPDFContent(
+          qrData,
+          (request.event as typeof request.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       } else {
         const totalPeople =
           request.package.includedPeople + request.extraGuests;
@@ -794,8 +809,11 @@ class RequestService {
             totalQRs: totalPeople,
           }));
 
-        qrPDFContent =
-          await QRGenerator.generateAnonymousQRPDFContent(anonymousQRData);
+        qrPDFContent = await QRGenerator.generateAnonymousQRPDFContent(
+          anonymousQRData,
+          (request.event as typeof request.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       }
 
       if (request.event.freeInvitationQRCount > 0) {
@@ -812,8 +830,11 @@ class RequestService {
           totalQRs: request.event.freeInvitationQRCount,
         }));
 
-        freeQRPDFContent =
-          await QRGenerator.generateFreeQRPDFContent(freeQRData);
+        freeQRPDFContent = await QRGenerator.generateFreeQRPDFContent(
+          freeQRData,
+          (request.event as typeof request.event & { ticketArt?: string })
+            .ticketArt ?? undefined,
+        );
       }
 
       return {

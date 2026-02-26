@@ -2804,12 +2804,6 @@ function buildPassportHTML(params: {
       0 0 60px rgba(0,0,0,0.4),
       inset -4px 0 12px rgba(0,0,0,0.5);
     overflow: hidden;
-    cursor: pointer;
-    transition: transform 0.15s ease;
-  }
-
-  .passport-cover:hover {
-    transform: scale(1.005);
   }
 
   .cover-art {
@@ -3119,40 +3113,44 @@ function buildPassportHTML(params: {
 
   .visa-qr-row {
     display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
   }
 
   .visa-qr-block {
-    flex-shrink: 0;
     background: white;
-    padding: 8px;
+    padding: 12px;
     border: 1px solid rgba(0,0,0,0.1);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .visa-qr-img {
     display: block;
-    width: 120px;
-    height: 120px;
+    width: 220px;
+    height: 220px;
   }
 
   .visa-qr-label {
     font-family: 'Share Tech Mono', monospace;
-    font-size: 7px;
-    letter-spacing: 1.5px;
+    font-size: 8px;
+    letter-spacing: 2px;
     color: #888;
     text-align: center;
-    margin-top: 5px;
+    margin-top: 8px;
   }
 
   .visa-code-block {
-    flex: 1;
+    width: 100%;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    justify-content: center;
+    flex-direction: row;
+    gap: 16px;
+    align-items: flex-start;
   }
 
   .visa-code-label {
@@ -3174,30 +3172,115 @@ function buildPassportHTML(params: {
     background: rgba(0,0,0,0.02);
   }
 
+  /* Sello principal — doble círculo, esquina superior derecha */
   .visa-stamp-circle {
     position: absolute;
-    top: 12px;
-    right: 16px;
-    width: 64px;
-    height: 64px;
-    border: 2.5px solid var(--stamp-color);
+    top: 14px;
+    right: 18px;
+    width: 100px;
+    height: 100px;
+    border: 3px solid var(--stamp-color);
     border-radius: 50%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transform: rotate(-18deg);
+    transform: rotate(-15deg);
     pointer-events: none;
+    box-shadow: inset 0 0 0 6px transparent, inset 0 0 0 8px var(--stamp-color);
+  }
+
+  .visa-stamp-circle::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1.5px solid var(--stamp-color);
+    border-radius: 50%;
   }
 
   .stamp-text {
     font-family: 'Cinzel', serif;
-    font-size: 6px;
-    letter-spacing: 1px;
+    font-size: 11px;
+    letter-spacing: 1.5px;
     color: var(--stamp-color);
     text-align: center;
+    font-weight: 900;
+    line-height: 2;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Sello secundario — rectangular doble borde, esquina inferior derecha de la página */
+  .visa-stamp-exclusive {
+    position: absolute;
+    bottom: 110px;
+    right: 0px;
+    transform: rotate(6deg);
+    width: 110px;
+    height: 62px;
+    border: 2.5px solid rgba(37, 99, 235, 0.25);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .visa-stamp-exclusive::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    border-radius: 1px;
+  }
+
+  .stamp-text-exclusive {
+    font-family: 'Cinzel', serif;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: rgba(37, 99, 235, 0.32);
+    text-align: center;
     font-weight: 700;
-    line-height: 1.6;
+    line-height: 1.7;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Sello terciario — círculo dentado SVG, esquina inferior izquierda de la página */
+  .visa-stamp-discretion {
+    position: absolute;
+    bottom: 100px;
+    left: 0px;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(9deg);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .visa-stamp-discretion svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .stamp-text-discretion {
+    font-family: 'Cinzel', serif;
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: rgba(5, 150, 105, 0.3);
+    text-align: center;
+    font-weight: 700;
+    line-height: 1.7;
+    position: relative;
+    z-index: 1;
   }
 
   .page-footer {
@@ -3318,7 +3401,7 @@ function buildPassportHTML(params: {
       page-break-after: always;
     }
 
-    .passport-cover { display: none; }
+    #page-0 { display: none !important; }
   }
 
   @media (max-width: 580px) {
@@ -3336,26 +3419,8 @@ function buildPassportHTML(params: {
 <div class="passport-wrapper">
   <div class="passport-book">
 
-    <div class="passport-cover" id="cover" onclick="goToPage(1)">
+    <div class="passport-cover" id="page-0">
       ${coverHTML}
-      <div class="cover-overlay"></div>
-      <div class="cover-top-badge">
-        <div class="cover-country">REPÚBLICA DE JET NIGHTS</div>
-        <div class="cover-brand">JET NIGHTS</div>
-      </div>
-      ${
-        !ticketArt
-          ? ""
-          : `
-      <div class="cover-emblem">
-        <div class="cover-emblem-inner">JN</div>
-      </div>
-      `
-      }
-      <div class="cover-bottom">
-        <div class="cover-doc-type">PASAPORTE DE ACCESO</div>
-        <div class="cover-total">${totalPages} VISA${totalPages !== 1 ? "S" : ""} INCLUIDA${totalPages !== 1 ? "S" : ""} · TOCA PARA ABRIR</div>
-      </div>
     </div>
 
     ${pagesHTML}
@@ -3363,9 +3428,9 @@ function buildPassportHTML(params: {
   </div>
 </div>
 
-<div class="nav-controls" id="navControls" style="display:none">
+<div class="nav-controls" id="navControls">
   <button class="nav-btn" id="btnPrev" onclick="prevPage()" disabled>&#8592;</button>
-  <span class="nav-counter" id="navCounter">1 / ${totalPages}</span>
+  <span class="nav-counter" id="navCounter">PORTADA</span>
   <button class="nav-btn" id="btnNext" onclick="nextPage()">&#8594;</button>
   <button class="print-btn" onclick="window.print()">${printButtonLabel}</button>
 </div>
@@ -3374,26 +3439,19 @@ function buildPassportHTML(params: {
   var currentPage = 0;
   var totalPages = ${totalPages};
 
-  function showCover() {
-    document.getElementById('cover').style.display = 'block';
-    document.getElementById('navControls').style.display = 'none';
-    for (var i = 1; i <= totalPages; i++) {
-      document.getElementById('page-' + i).style.display = 'none';
-    }
-  }
-
   function goToPage(n) {
-    document.getElementById('cover').style.display = 'none';
-    document.getElementById('navControls').style.display = 'flex';
-    for (var i = 1; i <= totalPages; i++) {
+    for (var i = 0; i <= totalPages; i++) {
       var el = document.getElementById('page-' + i);
-      el.style.display = i === n ? 'flex' : 'none';
-      el.style.flexDirection = i === n ? 'column' : '';
+      if (!el) continue;
+      var visible = i === n;
+      el.style.display = visible ? 'flex' : 'none';
+      if (visible && i > 0) el.style.flexDirection = 'column';
     }
     currentPage = n;
-    document.getElementById('navCounter').textContent = n + ' / ' + totalPages;
-    document.getElementById('btnPrev').disabled = n <= 1;
-    document.getElementById('btnNext').disabled = n >= totalPages;
+    document.getElementById('navCounter').textContent =
+      n === 0 ? 'PORTADA' : n + ' / ' + totalPages;
+    document.getElementById('btnPrev').disabled = n === 0;
+    document.getElementById('btnNext').disabled = n === totalPages;
   }
 
   function nextPage() {
@@ -3401,16 +3459,33 @@ function buildPassportHTML(params: {
   }
 
   function prevPage() {
-    if (currentPage > 1) {
-      if (currentPage === 1) { showCover(); }
-      else { goToPage(currentPage - 1); }
-    } else {
-      showCover();
-    }
+    if (currentPage > 0) goToPage(currentPage - 1);
   }
+
+  goToPage(0);
 </script>
 </body>
 </html>`;
+}
+
+function buildGearSVG(color: string): string {
+  const cx = 35;
+  const cy = 35;
+  const outerR = 32;
+  const innerR = 26;
+  const teeth = 16;
+  const points: string[] = [];
+  for (let i = 0; i < teeth * 2; i++) {
+    const angle = (Math.PI / teeth) * i - Math.PI / 2;
+    const r = i % 2 === 0 ? outerR : innerR;
+    points.push(
+      `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`,
+    );
+  }
+  return `<svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg">
+  <polygon points="${points.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="35" cy="35" r="18" fill="none" stroke="${color}" stroke-width="1.2"/>
+</svg>`;
 }
 
 function buildVisaPageGuest(
@@ -3421,6 +3496,13 @@ function buildVisaPageGuest(
 ): string {
   return `
     <div class="visa-body">
+      <div class="visa-stamp-exclusive">
+        <div class="stamp-text-exclusive">ACCESO<br>EXCLUSIVO</div>
+      </div>
+      <div class="visa-stamp-discretion">
+        ${buildGearSVG("rgba(5,150,105,0.22)")}
+        <div class="stamp-text-discretion">MÁXIMA<br>DISCRECIÓN</div>
+      </div>
       <div class="visa-stamp-area">
         <div class="visa-stamp-circle">
           <div class="stamp-text">JET<br>NIGHTS<br>ENTRADA</div>
@@ -3460,16 +3542,18 @@ function buildVisaPageGuest(
           ${
             entry.qrImage
               ? `<img src="${entry.qrImage}" alt="QR" class="visa-qr-img" />`
-              : `<div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;color:#dc3545;font-size:12px;font-weight:700;border:2px solid #dc3545;border-radius:4px">ERROR</div>`
+              : `<div style="width:220px;height:220px;display:flex;align-items:center;justify-content:center;color:#dc3545;font-size:12px;font-weight:700;border:2px solid #dc3545;border-radius:4px">ERROR</div>`
           }
           <div class="visa-qr-label">ESCANEAR AL INGRESO</div>
         </div>
         <div class="visa-code-block">
-          <div class="visa-code-label">CÓDIGO DE RESERVA</div>
-          <div class="visa-code-value">${entry.code}</div>
-          <div style="margin-top:8px">
+          <div style="flex:1">
+            <div class="visa-code-label">CÓDIGO DE RESERVA</div>
+            <div class="visa-code-value">${entry.code}</div>
+          </div>
+          <div style="flex-shrink:0;text-align:right">
             <div class="visa-code-label">ENTRADA</div>
-            <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:#1a1a1a;margin-top:2px">${index + 1} / ${total}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:22px;font-weight:700;color:#1a1a1a;margin-top:2px">${index + 1} / ${total}</div>
           </div>
         </div>
       </div>
@@ -3484,6 +3568,13 @@ function buildVisaPageAnonymous(
 ): string {
   return `
     <div class="visa-body">
+      <div class="visa-stamp-exclusive">
+        <div class="stamp-text-exclusive">ACCESO<br>EXCLUSIVO</div>
+      </div>
+      <div class="visa-stamp-discretion">
+        ${buildGearSVG("rgba(5,150,105,0.22)")}
+        <div class="stamp-text-discretion">MÁXIMA<br>DISCRECIÓN</div>
+      </div>
       <div class="visa-stamp-area">
         <div class="visa-stamp-circle">
           <div class="stamp-text">JET<br>NIGHTS<br>ENTRADA</div>
@@ -3520,16 +3611,18 @@ function buildVisaPageAnonymous(
           ${
             entry.qrImage
               ? `<img src="${entry.qrImage}" alt="QR" class="visa-qr-img" />`
-              : `<div style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;color:#dc3545;font-size:12px;font-weight:700;border:2px solid #dc3545;border-radius:4px">ERROR</div>`
+              : `<div style="width:220px;height:220px;display:flex;align-items:center;justify-content:center;color:#dc3545;font-size:12px;font-weight:700;border:2px solid #dc3545;border-radius:4px">ERROR</div>`
           }
           <div class="visa-qr-label">ESCANEAR AL INGRESO</div>
         </div>
         <div class="visa-code-block">
-          <div class="visa-code-label">CÓDIGO DE RESERVA</div>
-          <div class="visa-code-value">${entry.code}</div>
-          <div style="margin-top:8px">
+          <div style="flex:1">
+            <div class="visa-code-label">CÓDIGO DE RESERVA</div>
+            <div class="visa-code-value">${entry.code}</div>
+          </div>
+          <div style="flex-shrink:0;text-align:right">
             <div class="visa-code-label">ENTRADA</div>
-            <div style="font-family:'Share Tech Mono',monospace;font-size:18px;font-weight:700;color:#1a1a1a;margin-top:2px">${entry.qrNumber} / ${entry.totalQRs}</div>
+            <div style="font-family:'Share Tech Mono',monospace;font-size:22px;font-weight:700;color:#1a1a1a;margin-top:2px">${entry.qrNumber} / ${entry.totalQRs}</div>
           </div>
         </div>
       </div>
