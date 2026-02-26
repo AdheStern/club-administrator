@@ -6,10 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getEvents } from "@/lib/actions/event-actions";
-import { getPackages } from "@/lib/actions/package-actions";
 import { getRequestsByUserRole } from "@/lib/actions/request-actions";
 import type { EventWithRelations } from "@/lib/actions/types/event-types";
-import type { PackageWithRelations } from "@/lib/actions/types/package-types";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import { RequestList } from "./request-list";
 import { RequestStatsCard } from "./request-stats-card";
@@ -43,15 +41,13 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [requests, setRequests] = useState<RequestWithRelations[]>([]);
   const [events, setEvents] = useState<EventWithRelations[]>([]);
-  const [packages, setPackages] = useState<PackageWithRelations[]>([]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [requestsResult, eventsResult, packagesResult] = await Promise.all([
+      const [requestsResult, eventsResult] = await Promise.all([
         getRequestsByUserRole(userId, userRole, {}, { pageSize: 1000 }),
         getEvents({}, { pageSize: 1000 }),
-        getPackages({}, { pageSize: 1000 }),
       ]);
 
       setRequests(
@@ -64,13 +60,6 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
           ? eventsResult.data.data
           : [],
       );
-      setPackages(
-        packagesResult.success && packagesResult.data?.data
-          ? packagesResult.data.data
-          : [],
-      );
-    } catch (error) {
-      console.error("Error loading requests:", error);
     } finally {
       setIsLoading(false);
     }
@@ -89,14 +78,14 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
 
   if (isLoading) {
     return (
-      <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight">Solicitudes</h2>
-            <p className="text-muted-foreground">
-              Gestiona las solicitudes de mesas
-            </p>
-          </div>
+      <div className="flex-1 space-y-4 px-3 py-4 md:px-8 md:py-6">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+            Solicitudes
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Gestiona las solicitudes de mesas
+          </p>
         </div>
         <LoadingSkeleton />
       </div>
@@ -104,19 +93,19 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Solicitudes</h2>
-          <p className="text-muted-foreground">
-            Gestiona las solicitudes de mesas
-          </p>
-        </div>
+    <div className="flex-1 space-y-4 px-3 py-4 md:px-8 md:py-6">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">
+          Solicitudes
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Gestiona las solicitudes de mesas
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <RequestStatsCard
-          title="Total Solicitudes"
+          title="Total"
           value={stats.total}
           description="Solicitudes registradas"
           icon={FileText}
@@ -131,14 +120,14 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
         <RequestStatsCard
           title="Aprobadas"
           value={stats.approved}
-          description="Solicitudes confirmadas"
+          description="Confirmadas"
           icon={CheckCircle}
           className="border-green-200"
         />
         <RequestStatsCard
           title="Rechazadas"
           value={stats.rejected}
-          description="Solicitudes denegadas"
+          description="Denegadas"
           icon={XCircle}
           className="border-red-200"
         />
@@ -147,7 +136,6 @@ export function RequestContainer({ userId, userRole }: RequestContainerProps) {
       <RequestList
         initialRequests={requests}
         events={events}
-        packages={packages}
         userId={userId}
         userRole={userRole}
         onRefresh={loadData}

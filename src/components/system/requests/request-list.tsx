@@ -143,10 +143,11 @@ export function RequestList({
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               {canCreateBulkInvitations && (
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   onClick={() => setIsBulkInvitationOpen(true)}
                 >
                   <Ticket className="mr-2 h-4 w-4" />
@@ -154,7 +155,10 @@ export function RequestList({
                 </Button>
               )}
               {canCreate && (
-                <Button onClick={() => setIsFormOpen(true)}>
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => setIsFormOpen(true)}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Nueva solicitud
                 </Button>
@@ -174,11 +178,11 @@ export function RequestList({
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -193,7 +197,7 @@ export function RequestList({
               </div>
 
               <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="flex-1">
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Evento" />
                 </SelectTrigger>
                 <SelectContent>
