@@ -613,7 +613,18 @@ export function RequestFormDrawer({
                                 <SelectContent>
                                   {availablePackages.map((pkg) => (
                                     <SelectItem key={pkg.id} value={pkg.id}>
-                                      {pkg.name} — {pkg.includedPeople} personas
+                                      <span className="flex items-center gap-2">
+                                        <span
+                                          className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                                          style={{
+                                            backgroundColor:
+                                              (pkg as { color?: string })
+                                                .color ?? "#6366f1",
+                                          }}
+                                        />
+                                        {pkg.name} — {pkg.includedPeople}{" "}
+                                        personas
+                                      </span>
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

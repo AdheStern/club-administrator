@@ -17,6 +17,8 @@ import type {
   UpdatePackageDTO,
 } from "./types/package-types";
 
+const DEFAULT_COLOR = "#6366f1";
+
 interface ValidationStrategy {
   validate(data: unknown): Promise<ActionResult<void>>;
 }
@@ -46,10 +48,7 @@ class PackageNameValidationStrategy implements ValidationStrategy {
 
     const existingPackage = await db.package.findFirst({
       where: {
-        name: {
-          equals: trimmedName,
-          mode: "insensitive",
-        },
+        name: { equals: trimmedName, mode: "insensitive" },
         ...(data.excludeId && { id: { not: data.excludeId } }),
       },
     });
@@ -138,6 +137,7 @@ class PackageRepository {
         includedPeople: data.includedPeople,
         basePrice: data.basePrice,
         extraPersonPrice: data.extraPersonPrice,
+        color: data.color ?? DEFAULT_COLOR,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...(data.sectorIds &&
@@ -187,6 +187,7 @@ class PackageRepository {
           ...(data.extraPersonPrice !== undefined && {
             extraPersonPrice: data.extraPersonPrice,
           }),
+          ...(data.color && { color: data.color }),
           updatedAt: new Date(),
         },
       });
@@ -279,10 +280,7 @@ class PackageRepository {
 
     const result = await db.package.update({
       where: { id },
-      data: {
-        isActive: !pkg.isActive,
-        updatedAt: new Date(),
-      },
+      data: { isActive: !pkg.isActive, updatedAt: new Date() },
       include: packageInclude,
     });
 

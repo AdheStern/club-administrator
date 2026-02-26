@@ -51,6 +51,17 @@ import type {
 import type { SectorWithRelations } from "@/lib/actions/types/sector-types";
 import { cn } from "@/lib/utils";
 
+const PACKAGE_COLORS = [
+  { value: "#6366f1", label: "Indigo" },
+  { value: "#ec4899", label: "Rosa" },
+  { value: "#f59e0b", label: "Ámbar" },
+  { value: "#10b981", label: "Esmeralda" },
+  { value: "#3b82f6", label: "Azul" },
+  { value: "#ef4444", label: "Rojo" },
+] as const;
+
+const DEFAULT_COLOR = PACKAGE_COLORS[0].value;
+
 const packageFormSchema = z.object({
   name: z
     .string()
@@ -70,6 +81,7 @@ const packageFormSchema = z.object({
     .min(0, "El precio no puede ser negativo")
     .max(999999.99, "El precio no puede exceder 999,999.99")
     .optional(),
+  color: z.string().min(1, "Selecciona un color"),
   sectorIds: z.array(z.string()),
 });
 
@@ -101,6 +113,7 @@ export function PackageFormDrawer({
       includedPeople: 4,
       basePrice: 0,
       extraPersonPrice: 0,
+      color: DEFAULT_COLOR,
       sectorIds: [],
     },
   });
@@ -123,6 +136,7 @@ export function PackageFormDrawer({
         extraPersonPrice: pkg.extraPersonPrice
           ? Number(pkg.extraPersonPrice)
           : undefined,
+        color: pkg.color ?? DEFAULT_COLOR,
         sectorIds: pkg.packageSectors.map((ps) => ps.sectorId),
       });
     } else {
@@ -132,6 +146,7 @@ export function PackageFormDrawer({
         includedPeople: 4,
         basePrice: 0,
         extraPersonPrice: 0,
+        color: DEFAULT_COLOR,
         sectorIds: [],
       });
     }
@@ -155,6 +170,7 @@ export function PackageFormDrawer({
           includedPeople: values.includedPeople,
           basePrice: values.basePrice,
           extraPersonPrice: values.extraPersonPrice,
+          color: values.color,
           sectorIds: values.sectorIds,
         };
 
@@ -174,6 +190,7 @@ export function PackageFormDrawer({
           includedPeople: values.includedPeople,
           basePrice: values.basePrice,
           extraPersonPrice: values.extraPersonPrice,
+          color: values.color,
           sectorIds: values.sectorIds,
         };
 
@@ -245,6 +262,39 @@ export function PackageFormDrawer({
                   </FormControl>
                   <FormDescription>
                     Breve descripción del paquete
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="color"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Color del paquete</FormLabel>
+                  <FormControl>
+                    <div className="flex gap-3">
+                      {PACKAGE_COLORS.map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          title={color.label}
+                          onClick={() => field.onChange(color.value)}
+                          className={cn(
+                            "h-8 w-8 rounded-full border-2 transition-all",
+                            field.value === color.value
+                              ? "border-foreground scale-110 shadow-md"
+                              : "border-transparent hover:scale-105",
+                          )}
+                          style={{ backgroundColor: color.value }}
+                        />
+                      ))}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Color que identifica visualmente al paquete en las cards
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

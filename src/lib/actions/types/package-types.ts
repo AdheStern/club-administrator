@@ -8,6 +8,7 @@ export interface CreatePackageDTO {
   includedPeople: number;
   basePrice: number;
   extraPersonPrice?: number;
+  color?: string;
   sectorIds?: string[];
 }
 
@@ -19,6 +20,7 @@ export interface UpdatePackageDTO {
   basePrice?: number;
   extraPersonPrice?: number;
   isActive?: boolean;
+  color?: string;
   sectorIds?: string[];
 }
 

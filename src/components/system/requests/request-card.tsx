@@ -1,6 +1,7 @@
 // src/components/system/requests/request-card.tsx
 
 "use client";
+
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -33,6 +34,8 @@ import { downloadRequestQRs, markAsPaid } from "@/lib/actions/request-actions";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import { cn } from "@/lib/utils";
 import { PaymentVoucherUpload } from "./payment-voucher-upload";
+
+const DEFAULT_COLOR = "#6366f1";
 
 interface RequestCardProps {
   request: RequestWithRelations;
@@ -102,6 +105,9 @@ export function RequestCard({
     variant: "secondary",
     className: "",
   };
+
+  const packageColor =
+    (request.package as { color?: string })?.color ?? DEFAULT_COLOR;
 
   const canBeEdited =
     canEdit && (request.status === "PENDING" || request.status === "OBSERVED");
@@ -192,7 +198,10 @@ export function RequestCard({
   };
 
   return (
-    <Card className="hover:shadow-md transition-all duration-200">
+    <Card
+      className="hover:shadow-md transition-all duration-200 overflow-hidden"
+      style={{ borderTop: `4px solid ${packageColor}` }}
+    >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="space-y-2 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -325,7 +334,13 @@ export function RequestCard({
         </div>
 
         <div className="pt-2 border-t flex items-center justify-between text-xs text-muted-foreground">
-          <span>Paquete: {request.package?.name || "Ninguno"}</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full shrink-0"
+              style={{ backgroundColor: packageColor }}
+            />
+            <span>{request.package?.name || "Ninguno"}</span>
+          </div>
           <span>
             {(request.guestInvitations?.length || 0) + 1} persona
             {(request.guestInvitations?.length || 0) + 1 !== 1 ? "s" : ""}

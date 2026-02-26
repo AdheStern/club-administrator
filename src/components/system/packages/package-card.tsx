@@ -23,6 +23,8 @@ import {
 import type { PackageWithRelations } from "@/lib/actions/types/package-types";
 import { cn } from "@/lib/utils";
 
+const DEFAULT_COLOR = "#6366f1";
+
 interface PackageCardProps {
   package: PackageWithRelations;
   onEdit: (pkg: PackageWithRelations) => void;
@@ -46,18 +48,23 @@ export function PackageCard({
   };
 
   const hasAllSectors = pkg.packageSectors.length === 0;
+  const color = pkg.color ?? DEFAULT_COLOR;
 
   return (
     <Card
       className={cn(
-        "hover:shadow-md transition-all duration-200",
+        "hover:shadow-md transition-all duration-200 overflow-hidden",
         !pkg.isActive && "opacity-60",
       )}
+      style={{ borderTop: `4px solid ${color}` }}
     >
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <PackageIcon className="h-5 w-5 text-primary" />
+          <div
+            className="p-2 rounded-lg"
+            style={{ backgroundColor: `${color}20` }}
+          >
+            <PackageIcon className="h-5 w-5" style={{ color }} />
           </div>
           <div className="space-y-1">
             <h3 className="font-semibold text-lg leading-none">{pkg.name}</h3>
