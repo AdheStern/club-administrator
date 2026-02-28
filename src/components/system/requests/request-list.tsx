@@ -1,7 +1,7 @@
 // src/components/system/requests/request-list.tsx
 "use client";
 
-import { Filter, Plus, Search, Ticket } from "lucide-react";
+import { FileSpreadsheet, Filter, Plus, Search, Ticket } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
 import type { EventWithRelations } from "@/lib/actions/types/event-types";
 import type { RequestWithRelations } from "@/lib/actions/types/request-types";
 import { BulkInvitationDrawer } from "./bulk-invitation-drawer";
+import { ExportRequestsDialog } from "./export-requests-dialog";
 import {
   ApproveDialog,
   ObserveDialog,
@@ -49,6 +50,7 @@ export function RequestList({
     useState<RequestWithRelations | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isBulkInvitationOpen, setIsBulkInvitationOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isPreApproveOpen, setIsPreApproveOpen] = useState(false);
   const [isApproveOpen, setIsApproveOpen] = useState(false);
@@ -143,11 +145,20 @@ export function RequestList({
                 </p>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex gap-2">
+              {isManager && (
+                <Button
+                  variant="outline"
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => setIsExportOpen(true)}
+                >
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Exportar Excel
+                </Button>
+              )}
               {canCreateBulkInvitations && (
                 <Button
                   variant="outline"
-                  className="w-full sm:w-auto"
                   onClick={() => setIsBulkInvitationOpen(true)}
                 >
                   <Ticket className="mr-2 h-4 w-4" />
@@ -155,10 +166,7 @@ export function RequestList({
                 </Button>
               )}
               {canCreate && (
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => setIsFormOpen(true)}
-                >
+                <Button onClick={() => setIsFormOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Nueva solicitud
                 </Button>
@@ -178,11 +186,11 @@ export function RequestList({
               />
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2 flex-1">
+                <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger>
                     <SelectValue placeholder="Estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -197,7 +205,7 @@ export function RequestList({
               </div>
 
               <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Evento" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,6 +286,12 @@ export function RequestList({
         events={upcomingEvents}
         userId={userId}
         onSuccess={handleSuccess}
+      />
+
+      <ExportRequestsDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        events={events}
       />
 
       <RequestDetailsDialog
