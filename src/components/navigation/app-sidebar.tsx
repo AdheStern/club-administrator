@@ -1,11 +1,17 @@
+// src/components/navigation/app-sidebar.tsx
 "use client";
 
 import {
   ActivityIcon,
-  AppWindowIcon,
+  CalendarDays,
   CommandIcon,
+  InspectionPanelIcon,
+  LayoutDashboard,
   type LucideIcon,
-  UsersIcon,
+  Package,
+  Settings2,
+  TicketIcon,
+  VectorSquareIcon,
 } from "lucide-react";
 import type * as React from "react";
 import { NavMain } from "@/components/navigation/nav-main";
@@ -31,37 +37,37 @@ const navItems: NavItem[] = [
   {
     title: "Dashboard",
     url: "/dashboard",
-    icon: AppWindowIcon,
+    icon: LayoutDashboard,
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
     title: "Sectores",
     url: "/sectors",
-    icon: AppWindowIcon,
+    icon: VectorSquareIcon,
     requiredRoles: ["SUPER_ADMIN", "ADMIN"],
   },
   {
     title: "Mesas",
     url: "/tables",
-    icon: AppWindowIcon,
+    icon: InspectionPanelIcon,
     requiredRoles: ["SUPER_ADMIN", "ADMIN"],
   },
   {
     title: "Paquetes",
     url: "/packages",
-    icon: AppWindowIcon,
+    icon: Package,
     requiredRoles: ["SUPER_ADMIN", "ADMIN"],
   },
   {
     title: "Eventos",
     url: "/events",
-    icon: AppWindowIcon,
+    icon: CalendarDays,
     requiredRoles: ["SUPER_ADMIN", "ADMIN"],
   },
   {
     title: "Reservas",
     url: "/requests",
-    icon: AppWindowIcon,
+    icon: TicketIcon,
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
   },
   {
@@ -73,7 +79,7 @@ const navItems: NavItem[] = [
   {
     title: "Administración",
     url: "/administration",
-    icon: UsersIcon,
+    icon: Settings2,
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
 ];
@@ -97,6 +103,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
   const accessStrategy = new DefaultAccessStrategy();
+
   const filteredNavItems = navItems.filter((item) =>
     accessStrategy.canAccess(userRole, item.requiredRoles),
   );
@@ -124,9 +131,11 @@ export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+
       <SidebarContent>
         <NavMain items={filteredNavItems} />
       </SidebarContent>
+
       <SidebarFooter>
         <NavUser />
       </SidebarFooter>
