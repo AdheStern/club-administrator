@@ -63,7 +63,9 @@ export async function exportRequestsToExcel(
       include: {
         event: { select: { name: true, eventDate: true } },
         table: { include: { sector: { select: { name: true } } } },
-        package: { select: { name: true, includedPeople: true } },
+        package: {
+          select: { name: true, includedPeople: true, basePrice: true },
+        },
         client: { select: { name: true, identityCard: true } },
         createdBy: { select: { name: true } },
       },
@@ -94,7 +96,9 @@ export async function exportRequestsToExcel(
       { header: "Sector", width: 16 },
       { header: "Mesa", width: 12 },
       { header: "Paquete", width: 18 },
+      { header: "Precio Paquete", width: 14 },
       { header: "Personas", width: 10 },
+      { header: "Con Consumo", width: 13 },
       { header: "Estado", width: 14 },
       { header: "Pagado", width: 10 },
       { header: "Creado Por", width: 20 },
@@ -176,7 +180,9 @@ export async function exportRequestsToExcel(
         req.table.sector.name,
         req.table.name,
         req.package?.name ?? "-",
+        Number(req.package?.basePrice ?? 0),
         totalPeople,
+        req.hasConsumption,
         req.status,
         req.isPaid,
         req.createdBy?.name ?? "Sistema",
@@ -192,7 +198,8 @@ export async function exportRequestsToExcel(
 
         applyBorder(cell);
 
-        if (colNum === 10) {
+        // Estado (col 12)
+        if (colNum === 12) {
           const status = val as string;
           const colors = STATUS_COLORS[status] ?? {
             bg: "FFFFFF",
@@ -214,14 +221,15 @@ export async function exportRequestsToExcel(
           return;
         }
 
-        if (colNum === 11) {
-          const paid = val as boolean;
-          cell.value = paid ? "Sí" : "No";
+        // Pagado (col 13) y Con Consumo (col 11)
+        if (colNum === 13 || colNum === 11) {
+          const flag = val as boolean;
+          cell.value = flag ? "Sí" : "No";
           cell.font = {
             name: "Arial",
             size: 9,
             bold: true,
-            color: { argb: paid ? "FF166534" : "FF991B1B" },
+            color: { argb: flag ? "FF166534" : "FF991B1B" },
           };
           cell.fill = {
             type: "pattern",
@@ -229,6 +237,20 @@ export async function exportRequestsToExcel(
             fgColor: { argb: `FF${rowBg}` },
           };
           cell.alignment = { horizontal: "center", vertical: "middle" };
+          return;
+        }
+
+        // Precio paquete (col 9) — formato moneda
+        if (colNum === 9) {
+          cell.value = val as number;
+          cell.numFmt = '"Bs." #,##0.00';
+          cell.font = { name: "Arial", size: 9, color: { argb: "FF1A1A2E" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: `FF${rowBg}` },
+          };
+          cell.alignment = { horizontal: "right", vertical: "middle" };
           return;
         }
 
@@ -246,7 +268,7 @@ export async function exportRequestsToExcel(
           bold: colNum === 1,
         };
         cell.alignment = {
-          horizontal: [1, 9].includes(colNum) ? "center" : "left",
+          horizontal: [1, 10].includes(colNum) ? "center" : "left",
           vertical: "middle",
         };
       });

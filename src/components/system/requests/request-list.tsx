@@ -145,11 +145,11 @@ export function RequestList({
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               {isManager && (
                 <Button
                   variant="outline"
-                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  className="w-full sm:w-auto border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                   onClick={() => setIsExportOpen(true)}
                 >
                   <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -159,6 +159,7 @@ export function RequestList({
               {canCreateBulkInvitations && (
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   onClick={() => setIsBulkInvitationOpen(true)}
                 >
                   <Ticket className="mr-2 h-4 w-4" />
@@ -166,7 +167,10 @@ export function RequestList({
                 </Button>
               )}
               {canCreate && (
-                <Button onClick={() => setIsFormOpen(true)}>
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={() => setIsFormOpen(true)}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Nueva solicitud
                 </Button>
