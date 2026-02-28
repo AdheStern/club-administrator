@@ -506,6 +506,8 @@ class RequestService {
             eventDate: updated.event.eventDate,
             tableName: updated.table.name,
             sectorName: updated.table.sector.name,
+            holderName: updated.client.name,
+            holderIdentityCard: updated.client.identityCard,
           },
         );
 
@@ -523,6 +525,8 @@ class RequestService {
             eventDate: updated.event.eventDate,
             tableName: updated.table.name,
             sectorName: updated.table.sector.name,
+            holderName: updated.client.name,
+            holderIdentityCard: updated.client.identityCard,
           },
         );
 
@@ -542,6 +546,8 @@ class RequestService {
             eventDate: updated.event.eventDate,
             tableName: updated.table.name,
             sectorName: updated.table.sector.name,
+            holderName: updated.client.name,
+            holderIdentityCard: updated.client.identityCard,
           },
         );
 
@@ -787,6 +793,8 @@ class RequestService {
             eventDate: request.event.eventDate,
             tableName: request.table.name,
             sectorName: request.table.sector.name,
+            holderName: request.client.name,
+            holderIdentityCard: request.client.identityCard,
           }));
 
         qrPDFContent = await QRGenerator.generateQRPDFContent(
@@ -807,6 +815,8 @@ class RequestService {
             sectorName: request.table.sector.name,
             qrNumber: index + 1,
             totalQRs: totalPeople,
+            holderName: request.client.name,
+            holderIdentityCard: request.client.identityCard,
           }));
 
         qrPDFContent = await QRGenerator.generateAnonymousQRPDFContent(
@@ -828,6 +838,8 @@ class RequestService {
           sectorName: request.table.sector.name,
           qrNumber: index + 1,
           totalQRs: request.event.freeInvitationQRCount,
+          holderName: request.client.name,
+          holderIdentityCard: request.client.identityCard,
         }));
 
         freeQRPDFContent = await QRGenerator.generateFreeQRPDFContent(
