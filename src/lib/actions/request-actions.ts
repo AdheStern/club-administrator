@@ -1126,6 +1126,51 @@ class RequestService {
     }
   }
 
+  async deleteRequest(
+    requestId: string,
+  ): Promise<ActionResult<{ requestId: string }>> {
+    try {
+      const request = await this.repository.findById(requestId);
+
+      if (!request) {
+        return {
+          success: false,
+          error: "Solicitud no encontrada",
+          code: "NOT_FOUND",
+        };
+      }
+
+      if (request.status === "APPROVED") {
+        return {
+          success: false,
+          error: "Las reservas aprobadas deben cancelarse, no eliminarse",
+          code: "INVALID_STATUS",
+        };
+      }
+
+      await db.$transaction(async (tx) => {
+        await tx.guestInvitation.deleteMany({ where: { requestId } });
+
+        await tx.eventTable.updateMany({
+          where: { eventId: request.eventId, tableId: request.tableId },
+          data: { isBooked: false },
+        });
+
+        await tx.request.delete({ where: { id: requestId } });
+      });
+
+      revalidatePath("/requests");
+
+      return { success: true, data: { requestId } };
+    } catch {
+      return {
+        success: false,
+        error: "Error al eliminar la solicitud",
+        code: "DELETE_ERROR",
+      };
+    }
+  }
+
   async cancelRequest(
     requestId: string,
   ): Promise<ActionResult<{ requestId: string }>> {
@@ -1246,4 +1291,8 @@ export async function transferTable(dto: TransferTableDTO) {
 
 export async function cancelRequest(requestId: string) {
   return requestService.cancelRequest(requestId);
+}
+
+export async function deleteRequest(requestId: string) {
+  return requestService.deleteRequest(requestId);
 }

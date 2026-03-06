@@ -989,6 +989,7 @@ export function RequestFormDrawer({
                           <Checkbox
                             checked={field.value}
                             onCheckedChange={field.onChange}
+                            defaultChecked={true}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">

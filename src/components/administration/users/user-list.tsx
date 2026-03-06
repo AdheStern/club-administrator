@@ -31,18 +31,18 @@ export function UserList({
 }: UserListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserWithRelations | null>(
-    null
+    null,
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserWithRelations | null>(
-    null
+    null,
   );
 
   const filteredUsers = initialUsers.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      user.email.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleEdit = (user: UserWithRelations) => {
@@ -83,11 +83,6 @@ export function UserList({
 
   const columns = createUserColumns(handleEdit, handleDelete, handleManageRole);
 
-  const managers = initialUsers.filter(
-    (u) =>
-      u.role === "MANAGER" || u.role === "ADMIN" || u.role === "SUPER_ADMIN"
-  );
-
   return (
     <>
       <Card>
@@ -122,7 +117,7 @@ export function UserList({
         onOpenChange={handleFormClose}
         user={selectedUser}
         departments={departments}
-        managers={managers}
+        managers={initialUsers}
         onSuccess={() => {
           onRefresh();
           handleFormClose();

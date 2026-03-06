@@ -43,6 +43,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   cancelRequest,
+  deleteRequest,
   downloadRequestQRs,
   markAsPaid,
 } from "@/lib/actions/request-actions";
@@ -62,6 +63,7 @@ interface RequestCardProps {
   onTransferTable?: (request: RequestWithRelations) => void;
   canEdit?: boolean;
   canManage?: boolean;
+  canDelete?: boolean;
   onRefresh?: () => void;
 }
 
@@ -106,12 +108,15 @@ export function RequestCard({
   onTransferTable,
   canEdit = false,
   canManage = false,
+  canDelete = false,
   onRefresh,
 }: RequestCardProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [pendingVoucherUrl, setPendingVoucherUrl] = useState<string | null>(
     null,
   );
@@ -138,7 +143,8 @@ export function RequestCard({
     (request.status === "PENDING" ||
       request.status === "OBSERVED" ||
       request.status === "PRE_APPROVED");
-  const canBeCancelled = canManage && request.status !== "REJECTED";
+  const canBeCancelled = canManage && request.status === "APPROVED";
+  const canBeDeleted = canDelete && request.status !== "APPROVED";
 
   const handleCancelRequest = async () => {
     setIsCancelling(true);
@@ -155,6 +161,24 @@ export function RequestCard({
     } finally {
       setIsCancelling(false);
       setShowCancelDialog(false);
+    }
+  };
+
+  const handleDeleteRequest = async () => {
+    setIsDeleting(true);
+    try {
+      const result = await deleteRequest(request.id);
+      if (result.success) {
+        toast.success("Solicitud eliminada correctamente");
+        onRefresh?.();
+      } else {
+        toast.error(result.error || "Error al eliminar la solicitud");
+      }
+    } catch {
+      toast.error("Error al eliminar la solicitud");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
     }
   };
 
@@ -235,6 +259,7 @@ export function RequestCard({
 
   return (
     <>
+      {/* ── Diálogo cancelar reserva aprobada ───────────────────────────────── */}
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -264,6 +289,40 @@ export function RequestCard({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isCancelling ? "Cancelando..." : "Sí, cancelar reserva"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Diálogo eliminar solicitud no aprobada ───────────────────────────── */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar solicitud</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente la solicitud de{" "}
+              <span className="font-semibold">
+                {request.client?.name || "el cliente"}
+              </span>{" "}
+              para{" "}
+              <span className="font-semibold">
+                {request.event?.name || "el evento"}
+              </span>{" "}
+              (estado:{" "}
+              <span className="font-semibold">
+                {statusConfig[statusKey]?.label ?? request.status}
+              </span>
+              ). Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteRequest}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Eliminando..." : "Sí, eliminar solicitud"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -372,17 +431,24 @@ export function RequestCard({
                     )}
                 </>
               )}
+              {(canBeCancelled || canBeDeleted) && <DropdownMenuSeparator />}
               {canBeCancelled && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setShowCancelDialog(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Cancelar reserva
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem
+                  onClick={() => setShowCancelDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Cancelar reserva
+                </DropdownMenuItem>
+              )}
+              {canBeDeleted && (
+                <DropdownMenuItem
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Eliminar solicitud
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

@@ -5,7 +5,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, Loader2, X } from "lucide-react";
+import { CalendarIcon, KeyRound, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -14,6 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Form,
   FormControl,
@@ -51,7 +56,11 @@ import type {
   UserStatusType,
   UserWithRelations,
 } from "@/lib/actions/types/action-types";
-import { createUser, updateUser } from "@/lib/actions/user-actions";
+import {
+  createUser,
+  resetUserPassword,
+  updateUser,
+} from "@/lib/actions/user-actions";
 import {
   getAllSectors,
   getUserSectors,
@@ -78,7 +87,23 @@ const userFormSchema = z.object({
   sectorIds: z.array(z.string()).optional(),
 });
 
+const resetPasswordSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, "Mínimo 8 caracteres")
+      .regex(/[A-Z]/, "Debe contener al menos una mayúscula")
+      .regex(/[a-z]/, "Debe contener al menos una minúscula")
+      .regex(/[0-9]/, "Debe contener al menos un número"),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Las contraseñas no coinciden",
+    path: ["confirmPassword"],
+  });
+
 type UserFormValues = z.infer<typeof userFormSchema>;
+type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
 interface UserFormDrawerProps {
   open: boolean;
@@ -103,6 +128,8 @@ export function UserFormDrawer({
   onSuccess,
 }: UserFormDrawerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isPasswordSectionOpen, setIsPasswordSectionOpen] = useState(false);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSectors, setSelectedSectors] = useState<string[]>([]);
   const isEdit = !!user;
@@ -119,6 +146,14 @@ export function UserFormDrawer({
       departmentId: "",
       managerId: "",
       sectorIds: [],
+    },
+  });
+
+  const resetPasswordForm = useForm<ResetPasswordValues>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: {
+      newPassword: "",
+      confirmPassword: "",
     },
   });
 
@@ -167,12 +202,15 @@ export function UserFormDrawer({
           sectorIds: [],
         });
       }
+
+      setIsPasswordSectionOpen(false);
+      resetPasswordForm.reset();
     };
 
     if (open) {
       loadUserData();
     }
-  }, [user, form, open]);
+  }, [user, form, resetPasswordForm, open]);
 
   const toggleSector = (sectorId: string) => {
     setSelectedSectors((prev) =>
@@ -235,10 +273,32 @@ export function UserFormDrawer({
           toast.error(result.error || "Error al crear usuario");
         }
       }
-    } catch (error) {
+    } catch {
       toast.error("Ocurrió un error inesperado");
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function onResetPassword(values: ResetPasswordValues) {
+    if (!user) return;
+
+    setIsResettingPassword(true);
+
+    try {
+      const result = await resetUserPassword(user.id, values.newPassword);
+
+      if (result.success) {
+        toast.success("Contraseña actualizada correctamente");
+        resetPasswordForm.reset();
+        setIsPasswordSectionOpen(false);
+      } else {
+        toast.error(result.error || "Error al actualizar contraseña");
+      }
+    } catch {
+      toast.error("Ocurrió un error inesperado");
+    } finally {
+      setIsResettingPassword(false);
     }
   }
 
@@ -383,9 +443,9 @@ export function UserFormDrawer({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="USER">Usuario</SelectItem>
+                      <SelectItem value="USER">Realacionador</SelectItem>
                       <SelectItem value="VALIDATOR">Validador</SelectItem>
-                      <SelectItem value="SUPERVISOR">Supervisor</SelectItem>
+                      <SelectItem value="SUPERVISOR">Team Leader</SelectItem>
                       <SelectItem value="MANAGER">Manager</SelectItem>
                       <SelectItem value="ADMIN">Admin</SelectItem>
                       <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
@@ -455,7 +515,7 @@ export function UserFormDrawer({
               name="managerId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Manager</FormLabel>
+                  <FormLabel>Reporta a</FormLabel>
                   <Select
                     onValueChange={(value) => {
                       field.onChange(value === "none" ? "" : value);
@@ -464,11 +524,11 @@ export function UserFormDrawer({
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un manager" />
+                        <SelectValue placeholder="Selecciona un responsable" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="none">Sin manager</SelectItem>
+                      <SelectItem value="none">Sin responsable</SelectItem>
                       {managers
                         .filter((m) => m.id !== user?.id)
                         .map((manager) => (
@@ -565,6 +625,90 @@ export function UserFormDrawer({
             </div>
           </form>
         </Form>
+
+        {isEdit && (
+          <Collapsible
+            open={isPasswordSectionOpen}
+            onOpenChange={setIsPasswordSectionOpen}
+            className="mt-6 border rounded-lg"
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full flex items-center justify-between p-4 h-auto"
+                type="button"
+              >
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  <span className="font-medium">Cambiar contraseña</span>
+                </div>
+                <span className="text-muted-foreground text-sm">
+                  {isPasswordSectionOpen ? "Cerrar" : "Expandir"}
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="px-4 pb-4">
+              <Form {...resetPasswordForm}>
+                <form
+                  onSubmit={resetPasswordForm.handleSubmit(onResetPassword)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={resetPasswordForm.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nueva contraseña</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            placeholder="••••••••"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Mínimo 8 caracteres con mayúsculas, minúsculas y
+                          números
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={resetPasswordForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirmar contraseña</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            placeholder="••••••••"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    className="w-full"
+                    disabled={isResettingPassword}
+                  >
+                    {isResettingPassword && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Guardar nueva contraseña
+                  </Button>
+                </form>
+              </Form>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </SheetContent>
     </Sheet>
   );

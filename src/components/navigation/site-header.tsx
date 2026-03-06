@@ -1,10 +1,11 @@
 // src/components/navigation/site-header.tsx
+
 "use client";
 
 import { CameraIcon, SidebarIcon } from "lucide-react";
 import Link from "next/link";
 import { DynamicBreadcrumbs } from "@/components/navigation/dynamic-breadcrumbs";
-import { SearchForm } from "@/components/navigation/search-form";
+import { PushNotificationToggle } from "@/components/shared/push-notification-toggle";
 import { ModeToggle } from "@/components/theme/mode-toggle";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -18,6 +19,7 @@ export function SiteHeader() {
   const { data: session } = useSession();
 
   const userRole = session?.user?.role || "USER";
+  const userId = session?.user?.id;
   const canAccessCamera = CAMERA_ALLOWED_ROLES.includes(userRole);
 
   return (
@@ -36,8 +38,12 @@ export function SiteHeader() {
         <DynamicBreadcrumbs />
 
         <div className="flex flex-1 items-center justify-end gap-2">
-          {/* <SearchForm /> */}
           <Separator orientation="vertical" className="h-6" />
+
+          {userId && <PushNotificationToggle userId={userId} />}
+
+          <Separator orientation="vertical" className="h-6" />
+
           {canAccessCamera && (
             <>
               <Button variant="ghost" size="icon" asChild>
@@ -49,6 +55,7 @@ export function SiteHeader() {
               <Separator orientation="vertical" className="h-6" />
             </>
           )}
+
           <ModeToggle />
         </div>
       </div>

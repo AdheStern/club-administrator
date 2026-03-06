@@ -1,6 +1,13 @@
 // src/components/administration/shared/role-badge.tsx
 
-import { Shield, ShieldAlert, ShieldCheck, User } from "lucide-react";
+import {
+  Eye,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldHalf,
+  User,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type {
   OrgRoleType,
@@ -32,8 +39,18 @@ const userRoleConfig: Record<
     icon: Shield,
     color: "text-green-600 bg-green-50 border-green-200",
   },
+  SUPERVISOR: {
+    label: "Team Leader",
+    icon: ShieldHalf,
+    color: "text-orange-600 bg-orange-50 border-orange-200",
+  },
+  VALIDATOR: {
+    label: "Validador",
+    icon: Eye,
+    color: "text-yellow-600 bg-yellow-50 border-yellow-200",
+  },
   USER: {
-    label: "Usuario",
+    label: "Relacionador",
     icon: User,
     color: "text-gray-600 bg-gray-50 border-gray-200",
   },
@@ -61,7 +78,7 @@ const orgRoleConfig: Record<
 };
 
 export function RoleBadge({ role, className }: RoleBadgeProps) {
-  const isOrgRole = ["OWNER", "ADMIN", "MEMBER"].includes(role);
+  const isOrgRole = ["OWNER", "MEMBER"].includes(role);
   const config = isOrgRole
     ? orgRoleConfig[role as OrgRoleType]
     : userRoleConfig[role as UserRoleType];

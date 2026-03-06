@@ -5,7 +5,13 @@ import type { Prisma } from "@prisma/client";
 /**
  * Tipos de roles y estados como strings
  */
-export type UserRoleType = "SUPER_ADMIN" | "ADMIN" | "MANAGER" | "USER";
+export type UserRoleType =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "MANAGER"
+  | "SUPERVISOR"
+  | "VALIDATOR"
+  | "USER";
 export type UserStatusType = "ACTIVE" | "INACTIVE" | "SUSPENDED";
 export type OrgRoleType = "OWNER" | "ADMIN" | "MEMBER";
 export type InvitationStatusType =
@@ -31,6 +37,7 @@ export interface CreateUserDTO {
   name: string;
   email: string;
   password?: string;
+  birthDate?: Date;
   role?: UserRoleType;
   status?: UserStatusType;
   departmentId?: string;
@@ -42,6 +49,7 @@ export interface UpdateUserDTO {
   id: string;
   name?: string;
   email?: string;
+  birthDate?: Date;
   role?: UserRoleType;
   status?: UserStatusType;
   departmentId?: string;
@@ -177,12 +185,13 @@ export interface UserWithRelations {
   id: string;
   name: string;
   email: string;
+  birthDate?: Date | null;
   role: UserRoleType;
   status: UserStatusType;
   image: string | null;
   department: { id: string; name: string } | null;
-  manager: { id: string; name: string } | null;
-  subordinates: { id: string; name: string }[];
+  manager: { id: string; name: string; role: UserRoleType } | null;
+  subordinates: { id: string; name: string; role: UserRoleType }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -202,6 +211,8 @@ export const USER_ROLES: Record<UserRoleType, UserRoleType> = {
   SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
   MANAGER: "MANAGER",
+  SUPERVISOR: "SUPERVISOR",
+  VALIDATOR: "VALIDATOR",
   USER: "USER",
 };
 

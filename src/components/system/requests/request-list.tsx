@@ -65,6 +65,7 @@ export function RequestList({
   const canCreate = ["USER", "MANAGER", "ADMIN", "SUPER_ADMIN"].includes(
     userRole,
   );
+  const canDelete = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
 
   const filteredRequests = useMemo(() => {
     return initialRequests.filter((request) => {
@@ -263,6 +264,7 @@ export function RequestList({
                   onTransferTable={isManager ? handleTransferTable : undefined}
                   canEdit={request.createdById === userId || isManager}
                   canManage={isManager}
+                  canDelete={canDelete}
                   onRefresh={handleSuccess}
                 />
               ))}

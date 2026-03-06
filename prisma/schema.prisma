@@ -57,6 +57,7 @@ model User {
   @@map("user")
   qrentries QREntry[] @relation("QRScanner")
   userActivities UserActivity[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Session {
@@ -485,6 +486,21 @@ model UserActivity {
   @@index([userId])
   @@index([date])
   @@map("user_activity")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscription")
 }
 
 // ============================================

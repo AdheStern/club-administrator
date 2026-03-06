@@ -141,6 +141,32 @@ class HierarchyValidationStrategy implements ValidationStrategy {
   }
 }
 
+class PasswordValidationStrategy implements ValidationStrategy {
+  async validate(password: string): Promise<ActionResult<void>> {
+    if (password.length < 8) {
+      return {
+        success: false,
+        error: "La contraseña debe tener al menos 8 caracteres",
+        code: "PASSWORD_TOO_SHORT",
+      };
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      return {
+        success: false,
+        error: "La contraseña debe contener mayúsculas, minúsculas y números",
+        code: "PASSWORD_WEAK",
+      };
+    }
+
+    return { success: true };
+  }
+}
+
 class UserRepository {
   async create(userData: CreateUserDTO) {
     const preparedData = UserFactory.prepareUserData(userData);
@@ -278,6 +304,8 @@ class UserRepository {
             UserRole.ADMIN,
             UserRole.MANAGER,
             UserRole.SUPERVISOR,
+            UserRole.VALIDATOR,
+            UserRole.USER,
           ],
         },
         status: UserStatus.ACTIVE,
@@ -360,6 +388,8 @@ class HierarchyValidationHandler extends ValidationHandler {
 }
 
 class PasswordValidationHandler extends ValidationHandler {
+  private strategy = new PasswordValidationStrategy();
+
   protected async validate(data: CreateUserDTO): Promise<ActionResult<void>> {
     if (!data.password) {
       return {
@@ -369,27 +399,17 @@ class PasswordValidationHandler extends ValidationHandler {
       };
     }
 
-    if (data.password.length < 8) {
-      return {
-        success: false,
-        error: "La contraseña debe tener al menos 8 caracteres",
-        code: "PASSWORD_TOO_SHORT",
-      };
-    }
+    return this.strategy.validate(data.password);
+  }
+}
 
-    const hasUpperCase = /[A-Z]/.test(data.password);
-    const hasLowerCase = /[a-z]/.test(data.password);
-    const hasNumber = /[0-9]/.test(data.password);
+class NewPasswordValidationHandler extends ValidationHandler {
+  private strategy = new PasswordValidationStrategy();
 
-    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
-      return {
-        success: false,
-        error: "La contraseña debe contener mayúsculas, minúsculas y números",
-        code: "PASSWORD_WEAK",
-      };
-    }
-
-    return { success: true };
+  protected async validate(data: {
+    newPassword: string;
+  }): Promise<ActionResult<void>> {
+    return this.strategy.validate(data.newPassword);
   }
 }
 
@@ -456,6 +476,48 @@ class UserService {
             ? error.message
             : "Error al actualizar usuario",
         code: "UPDATE_ERROR",
+      };
+    }
+  }
+
+  async resetUserPassword(
+    userId: string,
+    newPassword: string,
+  ): Promise<ActionResult> {
+    try {
+      const validationChain = new NewPasswordValidationHandler();
+      const validationResult = await validationChain.handle({ newPassword });
+
+      if (!validationResult.success) {
+        return validationResult;
+      }
+
+      const user = await this.repository.findById(userId);
+
+      if (!user) {
+        return {
+          success: false,
+          error: "Usuario no encontrado",
+          code: "NOT_FOUND",
+        };
+      }
+
+      await auth.api.setPassword({
+        body: {
+          userId,
+          newPassword,
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al resetear contraseña",
+        code: "RESET_PASSWORD_ERROR",
       };
     }
   }
@@ -589,6 +651,10 @@ export async function createUser(dto: CreateUserDTO) {
 
 export async function updateUser(dto: UpdateUserDTO) {
   return userService.updateUser(dto);
+}
+
+export async function resetUserPassword(userId: string, newPassword: string) {
+  return userService.resetUserPassword(userId, newPassword);
 }
 
 export async function getUserById(id: string) {
