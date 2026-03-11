@@ -143,6 +143,20 @@ export async function createAnonymousQREntries(
   return qrEntries;
 }
 
+async function resolveTicketArt(url?: string): Promise<string | undefined> {
+  if (!url) return undefined;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return undefined;
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+    const mimeType = response.headers.get("content-type") ?? "image/jpeg";
+    return `data:${mimeType};base64,${base64}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildPassportHTML(params: {
   title: string;
   ticketArt: string | undefined;
@@ -658,7 +672,6 @@ function buildPassportHTML(params: {
     background: rgba(0,0,0,0.02);
   }
 
-  /* Sello principal — doble círculo, esquina superior derecha */
   .visa-stamp-circle {
     position: absolute;
     top: 14px;
@@ -696,7 +709,6 @@ function buildPassportHTML(params: {
     z-index: 1;
   }
 
-  /* Sello secundario — rectangular doble borde, esquina inferior derecha de la página */
   .visa-stamp-exclusive {
     position: absolute;
     bottom: 110px;
@@ -734,7 +746,6 @@ function buildPassportHTML(params: {
     z-index: 1;
   }
 
-  /* Sello terciario — círculo dentado SVG, esquina inferior izquierda de la página */
   .visa-stamp-discretion {
     position: absolute;
     bottom: 100px;
@@ -1184,19 +1195,11 @@ function buildVisaPageAnonymous(
   `;
 }
 
-export async function generateQRPDFContent(
-  qrEntries: QREntryData[],
-  ticketArt?: string,
-): Promise<string> {
-  const formatDate = (date: Date) =>
-    new Intl.DateTimeFormat("es-BO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(date));
-
-  const qrEntriesWithImages = await Promise.all(
-    qrEntries.map(async (entry) => {
+async function generateQRImages<T extends { code: string }>(
+  entries: T[],
+): Promise<(T & { qrImage: string })[]> {
+  return Promise.all(
+    entries.map(async (entry) => {
       try {
         const qrImage = await QRCode.toDataURL(entry.code, {
           width: 400,
@@ -1209,15 +1212,33 @@ export async function generateQRPDFContent(
       }
     }),
   );
+}
 
-  const visaPages = qrEntriesWithImages.map((entry, index) =>
-    buildVisaPageGuest(entry, index, qrEntriesWithImages.length, formatDate),
+function buildDateFormatter(): (d: Date) => string {
+  return (date: Date) =>
+    new Intl.DateTimeFormat("es-BO", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date(date));
+}
+
+export async function generateQRPDFContent(
+  qrEntries: QREntryData[],
+  ticketArt?: string,
+): Promise<string> {
+  const formatDate = buildDateFormatter();
+  const resolvedTicketArt = await resolveTicketArt(ticketArt);
+  const entriesWithImages = await generateQRImages(qrEntries);
+
+  const visaPages = entriesWithImages.map((entry, index) =>
+    buildVisaPageGuest(entry, index, entriesWithImages.length, formatDate),
   );
 
   return buildPassportHTML({
-    title: `Pasaporte JET NIGHTS — ${qrEntriesWithImages[0]?.eventName ?? "Evento"}`,
-    ticketArt,
-    eventName: qrEntriesWithImages[0]?.eventName ?? "Evento",
+    title: `Pasaporte JET NIGHTS — ${entriesWithImages[0]?.eventName ?? "Evento"}`,
+    ticketArt: resolvedTicketArt,
+    eventName: entriesWithImages[0]?.eventName ?? "Evento",
     visaPages,
     printButtonLabel: "IMPRIMIR",
     accentColor: "#6366f1",
@@ -1229,36 +1250,18 @@ export async function generateAnonymousQRPDFContent(
   qrEntries: AnonymousQRData[],
   ticketArt?: string,
 ): Promise<string> {
-  const formatDate = (date: Date) =>
-    new Intl.DateTimeFormat("es-BO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(date));
+  const formatDate = buildDateFormatter();
+  const resolvedTicketArt = await resolveTicketArt(ticketArt);
+  const entriesWithImages = await generateQRImages(qrEntries);
 
-  const qrEntriesWithImages = await Promise.all(
-    qrEntries.map(async (entry) => {
-      try {
-        const qrImage = await QRCode.toDataURL(entry.code, {
-          width: 400,
-          margin: 1,
-          color: { dark: "#000000", light: "#FFFFFF" },
-        });
-        return { ...entry, qrImage };
-      } catch {
-        return { ...entry, qrImage: "" };
-      }
-    }),
-  );
-
-  const visaPages = qrEntriesWithImages.map((entry) =>
+  const visaPages = entriesWithImages.map((entry) =>
     buildVisaPageAnonymous(entry, formatDate, false),
   );
 
   return buildPassportHTML({
-    title: `Pasaporte JET NIGHTS — ${qrEntriesWithImages[0]?.eventName ?? "Evento"}`,
-    ticketArt,
-    eventName: qrEntriesWithImages[0]?.eventName ?? "Evento",
+    title: `Pasaporte JET NIGHTS — ${entriesWithImages[0]?.eventName ?? "Evento"}`,
+    ticketArt: resolvedTicketArt,
+    eventName: entriesWithImages[0]?.eventName ?? "Evento",
     visaPages,
     printButtonLabel: "IMPRIMIR",
     accentColor: "#3b82f6",
@@ -1270,36 +1273,18 @@ export async function generateFreeQRPDFContent(
   qrEntries: AnonymousQRData[],
   ticketArt?: string,
 ): Promise<string> {
-  const formatDate = (date: Date) =>
-    new Intl.DateTimeFormat("es-BO", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date(date));
+  const formatDate = buildDateFormatter();
+  const resolvedTicketArt = await resolveTicketArt(ticketArt);
+  const entriesWithImages = await generateQRImages(qrEntries);
 
-  const qrEntriesWithImages = await Promise.all(
-    qrEntries.map(async (entry) => {
-      try {
-        const qrImage = await QRCode.toDataURL(entry.code, {
-          width: 400,
-          margin: 1,
-          color: { dark: "#000000", light: "#FFFFFF" },
-        });
-        return { ...entry, qrImage };
-      } catch {
-        return { ...entry, qrImage: "" };
-      }
-    }),
-  );
-
-  const visaPages = qrEntriesWithImages.map((entry) =>
+  const visaPages = entriesWithImages.map((entry) =>
     buildVisaPageAnonymous(entry, formatDate, true),
   );
 
   return buildPassportHTML({
-    title: `Pasaporte Gratuito JET NIGHTS — ${qrEntriesWithImages[0]?.eventName ?? "Evento"}`,
-    ticketArt,
-    eventName: qrEntriesWithImages[0]?.eventName ?? "Evento",
+    title: `Pasaporte Gratuito JET NIGHTS — ${entriesWithImages[0]?.eventName ?? "Evento"}`,
+    ticketArt: resolvedTicketArt,
+    eventName: entriesWithImages[0]?.eventName ?? "Evento",
     visaPages,
     printButtonLabel: "IMPRIMIR GRATIS",
     accentColor: "#ff6b6b",

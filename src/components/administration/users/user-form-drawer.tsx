@@ -443,7 +443,7 @@ export function UserFormDrawer({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="USER">Realacionador</SelectItem>
+                      <SelectItem value="USER">Relacionador</SelectItem>
                       <SelectItem value="VALIDATOR">Validador</SelectItem>
                       <SelectItem value="SUPERVISOR">Team Leader</SelectItem>
                       <SelectItem value="MANAGER">Manager</SelectItem>

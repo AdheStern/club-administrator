@@ -13,6 +13,7 @@ import {
   TicketIcon,
   VectorSquareIcon,
 } from "lucide-react";
+import Image from "next/image";
 import type * as React from "react";
 import { NavMain } from "@/components/navigation/nav-main";
 import { NavUser } from "@/components/navigation/nav-user";
@@ -120,7 +121,7 @@ export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
             <SidebarMenuButton size="lg" asChild>
               <a href="/">
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <CommandIcon className="size-4" />
+                  <Image src="/logo.png" alt="Jet" width={23} height={23} />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">JET CLUB</span>
