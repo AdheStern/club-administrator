@@ -3,12 +3,6 @@
 import webpush from "web-push";
 import { db } from "@/lib/db";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-);
-
 export interface PushPayload {
   title: string;
   body: string;
@@ -20,28 +14,50 @@ export interface PushPayload {
 
 const MANAGER_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER"];
 
+function getWebPush(): typeof webpush {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT!,
+    process.env.VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!,
+  );
+  return webpush;
+}
+
 export class PushNotificationService {
   async sendToUser(userId: string, payload: PushPayload): Promise<void> {
     const subscriptions = await db.pushSubscription.findMany({
       where: { userId },
     });
 
+    if (subscriptions.length === 0) {
+      console.log(`[push] No subscriptions found for user ${userId}`);
+      return;
+    }
+
+    const wp = getWebPush();
+
     await Promise.allSettled(
-      subscriptions.map((sub) =>
-        webpush
-          .sendNotification(
+      subscriptions.map(async (sub) => {
+        try {
+          await wp.sendNotification(
             {
               endpoint: sub.endpoint,
               keys: { p256dh: sub.p256dh, auth: sub.auth },
             },
             JSON.stringify(payload),
-          )
-          .catch(async (error) => {
-            if (error.statusCode === 410) {
-              await db.pushSubscription.delete({ where: { id: sub.id } });
-            }
-          }),
-      ),
+          );
+          console.log(`[push] Sent to user ${userId}: ${payload.title}`);
+        } catch (error: unknown) {
+          const status = (error as { statusCode?: number }).statusCode;
+          console.error(
+            `[push] Failed to send to user ${userId}, status: ${status}`,
+            error,
+          );
+          if (status === 410 || status === 404) {
+            await db.pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }
+      }),
     );
   }
 
@@ -50,6 +66,10 @@ export class PushNotificationService {
       where: { role: { in: MANAGER_ROLES }, status: "ACTIVE" },
       select: { id: true },
     });
+
+    console.log(
+      `[push] Sending to ${managers.length} managers: ${payload.title}`,
+    );
 
     await Promise.allSettled(
       managers.map((manager) => this.sendToUser(manager.id, payload)),

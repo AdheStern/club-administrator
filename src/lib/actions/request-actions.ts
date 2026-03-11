@@ -1,8 +1,10 @@
 // src/lib/actions/request-actions.ts
+
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { pushNotificationService } from "@/lib/services/push-notification-service";
 import { convertDecimalsToNumbers } from "./helpers/decimal-converter";
 import { GuestHelper } from "./helpers/guest-helper";
 import * as QRGenerator from "./helpers/qr-generator";
@@ -323,6 +325,7 @@ class RequestService {
 
       const request = await this.repository.create(dto);
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestCreated(request.id).catch(() => {});
 
       return {
         success: true,
@@ -391,6 +394,7 @@ class RequestService {
       );
 
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestPreApproved(dto.id).catch(() => {});
 
       return {
         success: true,
@@ -428,6 +432,7 @@ class RequestService {
         dto.paymentVoucherUrl,
       );
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestPaid(dto.id).catch(() => {});
 
       return {
         success: true,
@@ -559,6 +564,7 @@ class RequestService {
       }
 
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestApproved(dto.id).catch(() => {});
 
       return {
         success: true,
@@ -598,6 +604,8 @@ class RequestService {
       );
 
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestObserved(dto.id).catch(() => {});
+
       return {
         success: true,
         data: convertDecimalsToNumbers(updated) as RequestWithRelations,
@@ -635,6 +643,8 @@ class RequestService {
       );
 
       revalidatePath("/requests");
+      pushNotificationService.notifyRequestRejected(dto.id).catch(() => {});
+
       return {
         success: true,
         data: convertDecimalsToNumbers(updated) as RequestWithRelations,

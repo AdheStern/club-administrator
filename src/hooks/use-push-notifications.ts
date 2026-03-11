@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   subscribeToPush,
   unsubscribeFromPush,
@@ -33,8 +34,7 @@ export function usePushNotifications({
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [registration, setRegistration] =
-    useState<ServiceWorkerRegistration | null>(null);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   useEffect(() => {
     const supported = "serviceWorker" in navigator && "PushManager" in window;
@@ -45,7 +45,7 @@ export function usePushNotifications({
     navigator.serviceWorker
       .register("/sw.js")
       .then(async (reg) => {
-        setRegistration(reg);
+        registrationRef.current = reg;
         const existing = await reg.pushManager.getSubscription();
         setIsSubscribed(!!existing);
       })
@@ -55,6 +55,7 @@ export function usePushNotifications({
   }, []);
 
   const subscribe = async (): Promise<void> => {
+    const registration = registrationRef.current;
     if (!registration || !isSupported) return;
 
     setIsLoading(true);
@@ -62,36 +63,58 @@ export function usePushNotifications({
     try {
       const permission = await Notification.requestPermission();
 
+      if (permission === "denied") {
+        toast.error("Permiso de notificaciones denegado");
+        return;
+      }
+
       if (permission !== "granted") return;
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(
-          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-        ),
-      });
+      const existing = await registration.pushManager.getSubscription();
 
-      const { endpoint, keys } = subscription.toJSON() as {
+      const subscription =
+        existing ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+          ),
+        }));
+
+      const json = subscription.toJSON() as {
         endpoint: string;
         keys: { p256dh: string; auth: string };
       };
 
-      await subscribeToPush({
+      if (!json.keys?.p256dh || !json.keys?.auth) {
+        toast.error("Error al obtener claves de suscripción");
+        return;
+      }
+
+      const result = await subscribeToPush({
         userId,
-        endpoint,
-        p256dh: keys.p256dh,
-        auth: keys.auth,
+        endpoint: json.endpoint,
+        p256dh: json.keys.p256dh,
+        auth: json.keys.auth,
       });
 
+      if (!result.success) {
+        toast.error(result.error ?? "Error al guardar suscripción");
+        return;
+      }
+
       setIsSubscribed(true);
-    } catch {
-      // falla silenciosamente si el usuario deniega o hay error
+      toast.success("Notificaciones activadas");
+    } catch (error) {
+      toast.error("No se pudo activar las notificaciones");
+      console.error("[push:subscribe]", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   const unsubscribe = async (): Promise<void> => {
+    const registration = registrationRef.current;
     if (!registration) return;
 
     setIsLoading(true);
@@ -100,10 +123,21 @@ export function usePushNotifications({
       const subscription = await registration.pushManager.getSubscription();
 
       if (subscription) {
-        await unsubscribeFromPush(subscription.endpoint);
+        const result = await unsubscribeFromPush(subscription.endpoint);
+
+        if (!result.success) {
+          toast.error(result.error ?? "Error al desactivar suscripción");
+          return;
+        }
+
         await subscription.unsubscribe();
-        setIsSubscribed(false);
       }
+
+      setIsSubscribed(false);
+      toast.success("Notificaciones desactivadas");
+    } catch (error) {
+      toast.error("No se pudo desactivar las notificaciones");
+      console.error("[push:unsubscribe]", error);
     } finally {
       setIsLoading(false);
     }
