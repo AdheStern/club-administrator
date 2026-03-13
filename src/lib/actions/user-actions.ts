@@ -3,7 +3,9 @@
 "use server";
 
 import { UserRole, UserStatus } from "@prisma/client";
+import { randomBytes, scrypt } from "crypto";
 import { revalidatePath } from "next/cache";
+import { promisify } from "util";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type {
@@ -15,6 +17,14 @@ import type {
   UserFilters,
   UserWithRelations,
 } from "./types/action-types";
+
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${salt}:${derivedKey.toString("hex")}`;
+}
 
 const UserFactory = {
   prepareUserData(dto: CreateUserDTO | UpdateUserDTO) {
@@ -220,6 +230,25 @@ class UserRepository {
         manager: { select: { id: true, name: true, role: true } },
         subordinates: { select: { id: true, name: true, role: true } },
       },
+    });
+  }
+
+  async updatePassword(userId: string, newPassword: string): Promise<void> {
+    const hashed = await hashPassword(newPassword);
+
+    const account = await db.account.findFirst({
+      where: { userId, providerId: "credential" },
+    });
+
+    if (!account) {
+      throw new Error(
+        "El usuario no tiene cuenta con contraseña. Debe iniciar sesión con un proveedor externo.",
+      );
+    }
+
+    await db.account.update({
+      where: { id: account.id },
+      data: { password: hashed },
     });
   }
 
@@ -502,12 +531,7 @@ class UserService {
         };
       }
 
-      await auth.api.setPassword({
-        body: {
-          userId,
-          newPassword,
-        },
-      });
+      await this.repository.updatePassword(userId, newPassword);
 
       return { success: true };
     } catch (error) {
