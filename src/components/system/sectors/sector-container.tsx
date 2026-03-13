@@ -3,7 +3,7 @@
 "use client";
 
 import { Building2, Table, TrendingUp, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSectors } from "@/lib/actions/sector-actions";
@@ -35,22 +35,21 @@ export function SectorContainer() {
   const [isLoading, setIsLoading] = useState(true);
   const [sectors, setSectors] = useState<SectorWithRelations[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await getSectors();
-
+      const result = await getSectors({}, { page: 1, pageSize: 1000 });
       setSectors(result.success && result.data?.data ? result.data.data : []);
     } catch (error) {
       console.error("Error loading sectors:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const stats = {
     total: sectors.length,

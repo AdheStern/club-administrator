@@ -88,7 +88,7 @@ export function AdministrationContainer({
     try {
       const [usersResult, departmentsResult, hierarchyResult, orgsResult] =
         await Promise.all([
-          getUsers(),
+          getUsers({}, { page: 1, pageSize: 1000 }),
           getAllDepartments(),
           getDepartmentHierarchy(),
           getAllOrganizations(),
@@ -97,20 +97,20 @@ export function AdministrationContainer({
       setUsers(
         usersResult.success && usersResult.data?.data
           ? usersResult.data.data
-          : []
+          : [],
       );
       setDepartments(
         departmentsResult.success && departmentsResult.data
           ? departmentsResult.data
-          : []
+          : [],
       );
       setHierarchy(
         hierarchyResult.success && hierarchyResult.data
           ? hierarchyResult.data
-          : []
+          : [],
       );
       setOrganizations(
-        orgsResult.success && orgsResult.data ? orgsResult.data : []
+        orgsResult.success && orgsResult.data ? orgsResult.data : [],
       );
     } catch (error) {
       console.error("Error loading data:", error);
@@ -196,9 +196,7 @@ export function AdministrationContainer({
               value={userStats.active}
               description={
                 userStats.total > 0
-                  ? `${((userStats.active / userStats.total) * 100).toFixed(
-                      0
-                    )}% del total`
+                  ? `${((userStats.active / userStats.total) * 100).toFixed(0)}% del total`
                   : "Sin usuarios"
               }
               icon={Users}
@@ -216,10 +214,7 @@ export function AdministrationContainer({
               icon={Users}
               trend={
                 userStats.newThisMonth > 0
-                  ? {
-                      value: 12,
-                      isPositive: true,
-                    }
+                  ? { value: 12, isPositive: true }
                   : undefined
               }
             />
