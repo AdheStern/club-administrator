@@ -85,7 +85,13 @@ class EventDateValidationStrategy implements ValidationStrategy<{
       };
     }
 
-    if (data.visibilityEnd > data.eventDate) {
+    const visibilityEndDay = new Date(data.visibilityEnd);
+    visibilityEndDay.setHours(23, 59, 59, 999);
+
+    const eventDay = new Date(data.eventDate);
+    eventDay.setHours(23, 59, 59, 999);
+
+    if (visibilityEndDay > eventDay) {
       return {
         success: false,
         error:

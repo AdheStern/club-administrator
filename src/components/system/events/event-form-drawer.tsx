@@ -115,6 +115,7 @@ export function EventFormDrawer({
   const [paymentQRPreview, setPaymentQRPreview] = useState<string | null>(null);
   const [ticketArtPreview, setTicketArtPreview] = useState<string | null>(null);
   const [tableMapPreview, setTableMapPreview] = useState<string | null>(null);
+  const isInitializingRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const paymentQRInputRef = useRef<HTMLInputElement>(null);
   const ticketArtInputRef = useRef<HTMLInputElement>(null);
@@ -143,6 +144,8 @@ export function EventFormDrawer({
   );
 
   useEffect(() => {
+    isInitializingRef.current = true;
+
     if (event) {
       form.reset({
         name: event.name,
@@ -187,9 +190,15 @@ export function EventFormDrawer({
       setTicketArtPreview(null);
       setTableMapPreview(null);
     }
+
+    setTimeout(() => {
+      isInitializingRef.current = false;
+    }, 0);
   }, [event, form]);
 
   useEffect(() => {
+    if (isInitializingRef.current) return;
+
     const currentTableIds = form.getValues("tableIds");
     const validTableIds = currentTableIds.filter((tableId) =>
       availableTables.some((t) => t.id === tableId),
