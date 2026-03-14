@@ -20,10 +20,24 @@ import type {
 
 const scryptAsync = promisify(scrypt);
 
+const SCRYPT_PARAMS = {
+  N: 16384,
+  r: 16,
+  p: 1,
+  dkLen: 64,
+  maxmem: 128 * 16384 * 16 * 2,
+} as const;
+
 async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString("hex")}`;
+  const normalized = password.normalize("NFKC");
+  const key = (await scryptAsync(normalized, salt, SCRYPT_PARAMS.dkLen, {
+    N: SCRYPT_PARAMS.N,
+    r: SCRYPT_PARAMS.r,
+    p: SCRYPT_PARAMS.p,
+    maxmem: SCRYPT_PARAMS.maxmem,
+  })) as Buffer;
+  return `${salt}:${key.toString("hex")}`;
 }
 
 const UserFactory = {
