@@ -388,9 +388,14 @@ export function RequestFormDrawer({
     }
   }
 
-  const activeEvents = events.filter(
-    (e) => e.isActive && new Date(e.eventDate) > new Date(),
-  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const activeEvents = events.filter((e) => {
+    const eventDay = new Date(e.eventDate);
+    eventDay.setHours(0, 0, 0, 0);
+    return e.isActive && eventDay >= today;
+  });
 
   const selectedEventTableMap =
     (
