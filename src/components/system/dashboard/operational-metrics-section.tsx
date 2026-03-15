@@ -1,16 +1,15 @@
 // src/components/system/dashboard/operational-metrics-section.tsx
+
 "use client";
 
 import {
   Activity,
-  AlertCircle,
   CheckCircle,
   Clock,
   TrendingDown,
   Users,
   XCircle,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   DashboardStats,
   PendingRequest,
@@ -18,7 +17,9 @@ import type {
   RequestsByStatus,
   UpcomingEvent,
 } from "@/lib/actions/dashboard-actions";
+import type { QRStats } from "@/lib/actions/qr-stats-actions";
 import { PendingRequestsList } from "./pending-requests-list";
+import { QRStatsChart } from "./qr-stats-chart";
 import { RequestsChart } from "./requests-chart";
 import { StatsCard } from "./stats-card";
 import { StatusDistribution } from "./status-distribution";
@@ -30,6 +31,7 @@ interface OperationalMetricsSectionProps {
   requestsByMonth: RequestsByMonth[];
   upcomingEvents: UpcomingEvent[];
   pendingRequests: PendingRequest[];
+  qrStats: QRStats | null;
 }
 
 export function OperationalMetricsSection({
@@ -38,6 +40,7 @@ export function OperationalMetricsSection({
   requestsByMonth,
   upcomingEvents,
   pendingRequests,
+  qrStats,
 }: OperationalMetricsSectionProps) {
   const approvalRate =
     stats.totalRequests > 0
@@ -139,6 +142,12 @@ export function OperationalMetricsSection({
         <div className="col-span-12">
           <RequestsChart data={requestsByMonth} />
         </div>
+
+        {qrStats && (
+          <div className="col-span-12">
+            <QRStatsChart data={qrStats} />
+          </div>
+        )}
 
         <div className="col-span-12">
           <PendingRequestsList data={pendingRequests} />

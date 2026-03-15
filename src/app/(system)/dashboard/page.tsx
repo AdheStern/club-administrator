@@ -1,4 +1,5 @@
 // src/app/(system)/dashboard/page.tsx
+
 import { AlertCircle } from "lucide-react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
@@ -7,6 +8,7 @@ import { DashboardContainer } from "@/components/system/dashboard/dashboard-cont
 import { WelcomeMessage } from "@/components/system/dashboard/welcome-message";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getDashboardData } from "@/lib/actions/dashboard-actions";
+import { getQRStats } from "@/lib/actions/qr-stats-actions";
 import { auth } from "@/lib/auth";
 import { checkPermission, type UserRole } from "@/lib/utils/permissions";
 
@@ -38,7 +40,6 @@ export default async function DashboardPage() {
           Vista general del sistema y métricas principales
         </p>
       </div>
-
       {!canViewAnalytics ? (
         <WelcomeMessage userName={session.user.name} userRole={userRole} />
       ) : (
@@ -49,15 +50,19 @@ export default async function DashboardPage() {
 }
 
 async function DashboardAnalytics() {
-  const result = await getDashboardData();
+  const [dashboardResult, qrResult] = await Promise.all([
+    getDashboardData(),
+    getQRStats(),
+  ]);
 
-  if (!result.success || !result.data) {
+  if (!dashboardResult.success || !dashboardResult.data) {
     return (
       <Alert variant="destructive">
         <AlertCircle className="h-4 w-4" />
         <AlertTitle>Error</AlertTitle>
         <AlertDescription>
-          {result.error || "No se pudo cargar la información del dashboard"}
+          {dashboardResult.error ||
+            "No se pudo cargar la información del dashboard"}
         </AlertDescription>
       </Alert>
     );
@@ -65,7 +70,8 @@ async function DashboardAnalytics() {
 
   return (
     <DashboardContainer
-      initialData={result.data}
+      initialData={dashboardResult.data}
+      initialQRStats={qrResult.success && qrResult.data ? qrResult.data : null}
       getDashboardDataAction={getDashboardData}
     />
   );
