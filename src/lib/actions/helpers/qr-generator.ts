@@ -190,7 +190,7 @@ function buildPassportHTML(params: {
   const pagesHTML = visaPages
     .map(
       (pageContent, index) => `
-    <div class="passport-page visa-page" id="page-${index + 1}" style="display:none">
+    <div class="passport-page">
       <div class="page-header">
         <div class="page-brand">JET NIGHTS</div>
         <div class="page-number">VISA ${index + 1} / ${totalPages}</div>
@@ -221,10 +221,8 @@ function buildPassportHTML(params: {
     --accent: ${accentColor};
     --accent-gradient: ${accentGradient};
     --passport-w: 540px;
-    --passport-h: 740px;
     --cover-color: #1a1a2e;
     --page-bg: #faf8f2;
-    --page-line: rgba(0,0,0,0.08);
     --stamp-color: rgba(180, 20, 20, 0.18);
     --ink-color: #2c1810;
   }
@@ -241,30 +239,13 @@ function buildPassportHTML(params: {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    padding: 40px 20px 120px;
-  }
-
-  .passport-wrapper {
-    position: relative;
-    width: var(--passport-w);
-    height: var(--passport-h);
-    perspective: 2000px;
-    margin: 20px auto;
-  }
-
-  .passport-book {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    transform-style: preserve-3d;
+    padding: 40px 20px;
+    gap: 32px;
   }
 
   .passport-cover {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    inset: 0;
+    width: var(--passport-w);
+    height: 740px;
     background: var(--cover-color);
     border-radius: 8px 20px 20px 8px;
     box-shadow:
@@ -272,6 +253,7 @@ function buildPassportHTML(params: {
       0 0 60px rgba(0,0,0,0.4),
       inset -4px 0 12px rgba(0,0,0,0.5);
     overflow: hidden;
+    flex-shrink: 0;
   }
 
   .cover-art {
@@ -314,110 +296,18 @@ function buildPassportHTML(params: {
     padding: 0 40px;
   }
 
-  .cover-overlay {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to bottom,
-      rgba(0,0,0,0.5) 0%,
-      rgba(0,0,0,0.1) 40%,
-      rgba(0,0,0,0.1) 60%,
-      rgba(0,0,0,0.7) 100%
-    );
-    pointer-events: none;
-  }
-
-  .cover-top-badge {
-    position: absolute;
-    top: 30px;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .cover-country {
-    font-family: 'Cinzel', serif;
-    font-size: 11px;
-    font-weight: 400;
-    color: rgba(255,255,255,0.85);
-    letter-spacing: 5px;
-    text-align: center;
-  }
-
-  .cover-brand {
-    font-family: 'Cinzel', serif;
-    font-size: 32px;
-    font-weight: 900;
-    color: #fff;
-    letter-spacing: 8px;
-    text-shadow: 0 2px 12px rgba(0,0,0,0.8);
-  }
-
-  .cover-emblem {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 100px;
-    height: 100px;
-    border: 3px solid rgba(255,255,255,0.3);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(2px);
-    background: rgba(255,255,255,0.05);
-  }
-
-  .cover-emblem-inner {
-    font-family: 'Cinzel', serif;
-    font-size: 36px;
-    font-weight: 900;
-    color: rgba(255,255,255,0.9);
-    text-shadow: 0 2px 8px rgba(0,0,0,0.6);
-  }
-
-  .cover-bottom {
-    position: absolute;
-    bottom: 28px;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .cover-doc-type {
-    font-family: 'Cinzel', serif;
-    font-size: 13px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.9);
-    letter-spacing: 4px;
-  }
-
-  .cover-total {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 11px;
-    color: rgba(255,255,255,0.5);
-    letter-spacing: 2px;
-  }
-
   .passport-page {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    inset: 0;
+    width: var(--passport-w);
     background: var(--page-bg);
     border-radius: 8px 20px 20px 8px;
     box-shadow:
       -8px 0 20px rgba(0,0,0,0.5),
       0 0 60px rgba(0,0,0,0.3);
     overflow: hidden;
+    display: flex;
     flex-direction: column;
+    position: relative;
+    flex-shrink: 0;
   }
 
   .page-watermark {
@@ -501,7 +391,6 @@ function buildPassportHTML(params: {
     gap: 18px;
     position: relative;
     z-index: 1;
-    flex: 1;
   }
 
   .visa-stamp-area {
@@ -804,54 +693,6 @@ function buildPassportHTML(params: {
     text-overflow: clip;
   }
 
-  .nav-controls {
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    z-index: 100;
-  }
-
-  .nav-btn {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-    color: white;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    font-size: 18px;
-    cursor: pointer;
-    backdrop-filter: blur(8px);
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .nav-btn:hover {
-    background: rgba(255,255,255,0.16);
-    border-color: rgba(255,255,255,0.3);
-    transform: scale(1.08);
-  }
-
-  .nav-btn:disabled {
-    opacity: 0.25;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .nav-counter {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px;
-    color: rgba(255,255,255,0.5);
-    letter-spacing: 3px;
-    min-width: 80px;
-    text-align: center;
-  }
-
   .print-btn {
     background: white;
     color: #000;
@@ -865,7 +706,6 @@ function buildPassportHTML(params: {
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     transition: all 0.2s ease;
-    margin-left: 8px;
   }
 
   .print-btn:hover {
@@ -878,57 +718,33 @@ function buildPassportHTML(params: {
     body {
       background: white;
       padding: 0;
-      display: block;
+      gap: 0;
     }
 
-    .nav-controls { display: none; }
-
-    .passport-wrapper {
-      width: 100%;
-      height: auto;
-      perspective: none;
-      page-break-after: always;
-    }
+    .passport-cover { display: none; }
 
     .passport-page {
-      display: flex !important;
-      position: relative !important;
-      height: auto !important;
+      width: 100%;
       box-shadow: none;
+      border-radius: 0;
       page-break-after: always;
     }
 
-    #page-0 { display: none !important; }
+    .print-btn { display: none; }
   }
 
   @media (max-width: 580px) {
     :root {
       --passport-w: calc(100vw - 32px);
-      --passport-h: auto;
     }
 
     body {
-      padding: 20px 16px 100px;
-    }
-
-    .passport-wrapper {
-      height: auto;
-      perspective: none;
-    }
-
-    .passport-book {
-      height: auto;
-    }
-
-    .passport-cover,
-    .passport-page {
-      position: relative !important;
-      height: auto !important;
-      min-height: 480px;
-      inset: auto;
+      padding: 20px 16px;
+      gap: 24px;
     }
 
     .passport-cover {
+      height: auto;
       min-height: 360px;
     }
 
@@ -948,79 +764,22 @@ function buildPassportHTML(params: {
       height: 180px;
     }
 
-    .visa-title {
-      font-size: 17px;
-    }
-
-    .page-watermark {
-      font-size: 32px;
-    }
-
-    .mrz-line {
-      font-size: 8px;
-    }
-
-    .nav-controls {
-      gap: 10px;
-    }
-
-    .print-btn {
-      padding: 12px 18px;
-      font-size: 10px;
-    }
+    .visa-title { font-size: 17px; }
+    .page-watermark { font-size: 32px; }
+    .mrz-line { font-size: 8px; }
   }
 </style>
 </head>
 <body>
 
-<div class="passport-wrapper">
-  <div class="passport-book">
-
-    <div class="passport-cover" id="page-0">
-      ${coverHTML}
-    </div>
-
-    ${pagesHTML}
-
+  <div class="passport-cover">
+    ${coverHTML}
   </div>
-</div>
 
-<div class="nav-controls" id="navControls">
-  <button class="nav-btn" id="btnPrev" onclick="prevPage()" disabled>&#8592;</button>
-  <span class="nav-counter" id="navCounter">PORTADA</span>
-  <button class="nav-btn" id="btnNext" onclick="nextPage()">&#8594;</button>
+  ${pagesHTML}
+
   <button class="print-btn" onclick="window.print()">${printButtonLabel}</button>
-</div>
 
-<script>
-  var currentPage = 0;
-  var totalPages = ${totalPages};
-
-  function goToPage(n) {
-    for (var i = 0; i <= totalPages; i++) {
-      var el = document.getElementById('page-' + i);
-      if (!el) continue;
-      var visible = i === n;
-      el.style.display = visible ? 'flex' : 'none';
-      if (visible && i > 0) el.style.flexDirection = 'column';
-    }
-    currentPage = n;
-    document.getElementById('navCounter').textContent =
-      n === 0 ? 'PORTADA' : n + ' / ' + totalPages;
-    document.getElementById('btnPrev').disabled = n === 0;
-    document.getElementById('btnNext').disabled = n === totalPages;
-  }
-
-  function nextPage() {
-    if (currentPage < totalPages) goToPage(currentPage + 1);
-  }
-
-  function prevPage() {
-    if (currentPage > 0) goToPage(currentPage - 1);
-  }
-
-  goToPage(0);
-</script>
 </body>
 </html>`;
 }
