@@ -15,6 +15,9 @@ const PERMISSIONS: Record<string, PermissionConfig> = {
   VIEW_ADMINISTRATION: {
     allowedRoles: ["SUPER_ADMIN", "ADMIN"],
   },
+  VIEW_EVENT_PANEL: {
+    allowedRoles: ["SUPER_ADMIN", "ADMIN"],
+  },
   MANAGE_USERS: {
     allowedRoles: ["SUPER_ADMIN", "ADMIN"],
   },

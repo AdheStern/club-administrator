@@ -42,6 +42,12 @@ const navItems: NavItem[] = [
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
+    title: "Cuadro de Mando",
+    url: "/event-panel",
+    icon: LayoutDashboard,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN"],
+  },
+  {
     title: "Sectores",
     url: "/sectors",
     icon: VectorSquareIcon,
