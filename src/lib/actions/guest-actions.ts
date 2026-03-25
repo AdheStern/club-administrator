@@ -142,11 +142,19 @@ class GuestRepository {
     return count > 0;
   }
 
+  private readonly anonymousFilter = {
+    NOT: [
+      { identityCard: { startsWith: "TEMP-" } },
+      { name: { equals: "Invitado Anónimo" } },
+    ],
+  };
+
   private buildWhereClause(filters: GuestFilters) {
-    if (!filters.search?.trim()) return {};
+    if (!filters.search?.trim()) return this.anonymousFilter;
 
     const term = filters.search.trim();
     return {
+      ...this.anonymousFilter,
       OR: [
         { name: { contains: term, mode: "insensitive" as const } },
         { identityCard: { contains: term, mode: "insensitive" as const } },

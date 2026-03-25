@@ -63,11 +63,13 @@ export const createGuestColumns = (
   {
     accessorKey: "name",
     header: "Nombre",
+    enableSorting: true,
     cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
   },
   {
     accessorKey: "identityCard",
     header: "CI",
+    enableSorting: true,
     cell: ({ row }) => (
       <span className="font-mono text-sm">{row.original.identityCard}</span>
     ),
@@ -75,6 +77,7 @@ export const createGuestColumns = (
   {
     accessorKey: "phone",
     header: "Contacto",
+    enableSorting: false,
     cell: ({ row }) => {
       const { phone, instagramHandle } = row.original;
       return (
@@ -93,6 +96,7 @@ export const createGuestColumns = (
   {
     accessorKey: "loyaltyPoints",
     header: "Puntos",
+    enableSorting: true,
     cell: ({ row }) => (
       <div className="flex items-center gap-1">
         <Star className="h-3.5 w-3.5 text-yellow-500" />
@@ -103,13 +107,16 @@ export const createGuestColumns = (
   {
     accessorKey: "eventsAttended",
     header: "Eventos",
+    enableSorting: true,
     cell: ({ row }) => (
       <Badge variant="secondary">{row.original.eventsAttended}</Badge>
     ),
   },
   {
-    accessorKey: "requestsAsClient",
+    id: "requestsAsClient",
     header: "Reservas",
+    enableSorting: true,
+    accessorFn: (row) => row._count.requestsAsClient,
     cell: ({ row }) => (
       <Badge variant="outline">{row.original._count.requestsAsClient}</Badge>
     ),
@@ -117,6 +124,7 @@ export const createGuestColumns = (
   {
     accessorKey: "createdAt",
     header: "Registrado",
+    enableSorting: true,
     cell: ({ row }) => (
       <span className="text-sm text-muted-foreground">
         {format(new Date(row.original.createdAt), "dd MMM yyyy", {
@@ -127,6 +135,7 @@ export const createGuestColumns = (
   },
   {
     id: "actions",
+    enableSorting: false,
     cell: ({ row }) => (
       <GuestActions
         guest={row.original}
