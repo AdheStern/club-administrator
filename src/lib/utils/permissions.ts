@@ -45,6 +45,7 @@ const PERMISSIONS: Record<string, PermissionConfig> = {
   MANAGE_TABLES: {
     allowedRoles: ["SUPER_ADMIN", "ADMIN"],
   },
+  MANAGE_GUESTS: { allowedRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"] },
   VIEW_DASHBOARD_ANALYTICS: {
     allowedRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
@@ -91,6 +92,7 @@ export namespace PermissionService {
       "/packages": "MANAGE_PACKAGES",
       "/sectors": "MANAGE_SECTORS",
       "/tables": "MANAGE_TABLES",
+      "/guests": "MANAGE_GUESTS",
     };
 
     const permission = routePermissions[route];
