@@ -12,7 +12,13 @@ import { Separator } from "@/components/ui/separator";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useSession } from "@/lib/auth-client";
 
-const CAMERA_ALLOWED_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGER", "VALIDATOR"];
+const CAMERA_ALLOWED_ROLES = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "MANAGER",
+  "VALIDATOR",
+  "SUPERVISOR",
+];
 
 export function SiteHeader() {
   const { toggleSidebar } = useSidebar();
