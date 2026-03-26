@@ -11,6 +11,7 @@ import {
   Package,
   Settings2,
   TicketIcon,
+  UserSearchIcon,
   VectorSquareIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -92,7 +93,7 @@ const navItems: NavItem[] = [
   {
     title: "Clientes",
     url: "/guests",
-    icon: ActivityIcon,
+    icon: UserSearchIcon,
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER"],
   },
   {
