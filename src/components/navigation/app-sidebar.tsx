@@ -144,7 +144,7 @@ export function AppSidebar({ userRole = "USER", ...props }: AppSidebarProps) {
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">JET CLUB</span>
-                  <span className="truncate text-xs">Reservas</span>
+                  <span className="truncate text-xs">Elite Pass</span>
                 </div>
               </a>
             </SidebarMenuButton>
