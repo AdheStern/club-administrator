@@ -36,6 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createEvent,
@@ -87,6 +88,7 @@ const eventFormSchema = z.object({
   visibilityEnd: z.date({
     message: "La fecha de fin de visibilidad es requerida",
   }),
+  hasCover: z.boolean(),
   sectorIds: z.array(z.string()).min(1, "Debe seleccionar al menos un sector"),
   tableIds: z.array(z.string()).min(1, "Debe seleccionar al menos una mesa"),
 });
@@ -132,6 +134,7 @@ export function EventFormDrawer({
       freeInvitationQRCount: 0,
       visibilityStart: new Date(),
       visibilityEnd: new Date(),
+      hasCover: false,
       sectorIds: [],
       tableIds: [],
     },
@@ -139,8 +142,8 @@ export function EventFormDrawer({
 
   const selectedSectorIds = form.watch("sectorIds");
 
-  const availableTables = tables.filter((table) =>
-    selectedSectorIds.includes(table.sectorId),
+  const availableTables = tables.filter(
+    (table) => selectedSectorIds.includes(table.sectorId) && table.isActive,
   );
 
   useEffect(() => {
@@ -155,6 +158,9 @@ export function EventFormDrawer({
         freeInvitationQRCount: event.freeInvitationQRCount,
         visibilityStart: new Date(event.visibilityStart),
         visibilityEnd: new Date(event.visibilityEnd),
+        hasCover:
+          (event as EventWithRelationsDTO & { hasCover?: boolean }).hasCover ??
+          false,
         sectorIds: event.eventSectors.map((es) => es.sector.id),
         tableIds: event.eventTables.map((et) => et.table.id),
       });
@@ -182,6 +188,7 @@ export function EventFormDrawer({
         freeInvitationQRCount: 0,
         visibilityStart: new Date(),
         visibilityEnd: new Date(),
+        hasCover: false,
         sectorIds: [],
         tableIds: [],
       });
@@ -377,6 +384,7 @@ export function EventFormDrawer({
           freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
           visibilityEnd: values.visibilityEnd,
+          hasCover: values.hasCover,
           sectorIds: values.sectorIds,
           tableIds: values.tableIds,
         };
@@ -403,6 +411,7 @@ export function EventFormDrawer({
           freeInvitationQRCount: values.freeInvitationQRCount,
           visibilityStart: values.visibilityStart,
           visibilityEnd: values.visibilityEnd,
+          hasCover: values.hasCover,
           sectorIds: values.sectorIds,
           tableIds: values.tableIds,
         };
@@ -443,7 +452,7 @@ export function EventFormDrawer({
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-6 mt-6"
+            className="space-y-6 mt-6 pb-10"
           >
             <FormField
               control={form.control}
@@ -787,6 +796,29 @@ export function EventFormDrawer({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="hasCover"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                  <div>
+                    <FormLabel className="text-base">
+                      Cover habilitado
+                    </FormLabel>
+                    <FormDescription>
+                      Permite registrar cobros de cover en este evento
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

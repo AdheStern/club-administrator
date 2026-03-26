@@ -8,7 +8,6 @@ import { buildBlobName, uploadBlob } from "@/lib/azure/blob-storage";
 import { validateImageFile } from "@/lib/azure/image-validator";
 import { db } from "@/lib/db";
 import { saveFile } from "@/lib/utils/file-upload";
-import { convertDecimalsToNumbers } from "./helpers/decimal-converter";
 import type {
   ActionResult,
   PaginatedResult,
@@ -209,6 +208,7 @@ class EventRepository {
           ? new Decimal(data.commissionAmount)
           : null,
         freeInvitationQRCount: data.freeInvitationQRCount ?? 0,
+        hasCover: data.hasCover ?? false,
         visibilityStart: data.visibilityStart,
         visibilityEnd: data.visibilityEnd,
         createdAt: new Date(),
@@ -292,6 +292,7 @@ class EventRepository {
       ...(data.freeInvitationQRCount !== undefined && {
         freeInvitationQRCount: data.freeInvitationQRCount,
       }),
+      ...(data.hasCover !== undefined && { hasCover: data.hasCover }),
       ...(data.visibilityStart && { visibilityStart: data.visibilityStart }),
       ...(data.visibilityEnd && { visibilityEnd: data.visibilityEnd }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),

@@ -16,6 +16,7 @@ export interface CreateEventDTO {
   visibilityEnd: Date;
   sectorIds: string[];
   tableIds: string[];
+  hasCover?: boolean;
 }
 
 export interface UpdateEventDTO {
@@ -34,6 +35,7 @@ export interface UpdateEventDTO {
   isActive?: boolean;
   sectorIds?: string[];
   tableIds?: string[];
+  hasCover?: boolean;
 }
 
 export interface EventFilters {

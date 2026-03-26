@@ -78,6 +78,12 @@ const navItems: NavItem[] = [
     requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
   },
   {
+    title: "Covers",
+    url: "/covers",
+    icon: TicketIcon,
+    requiredRoles: ["SUPER_ADMIN", "ADMIN", "MANAGER", "SUPERVISOR", "USER"],
+  },
+  {
     title: "Actividad de Relacionadores",
     url: "/user-activity",
     icon: ActivityIcon,

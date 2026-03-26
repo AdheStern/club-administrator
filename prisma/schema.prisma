@@ -45,6 +45,7 @@ model User {
   
   requestsCreated Request[]         @relation("RequestCreator")
   requestsApproved Request[]        @relation("RequestApprover")
+  coversCreated Cover[] @relation("CoverCreator")
   qrScans         QRScan[]
   
   userSectors   UserSector[]
@@ -297,6 +298,9 @@ model Event {
   eventTables       EventTable[]
   requests          Request[]
 
+  hasCover Boolean @default(false)
+  covers   Cover[]
+
   @@index([eventDate])
   @@index([isActive])
   @@index([visibilityStart, visibilityEnd])
@@ -403,6 +407,24 @@ model Request {
   @@index([isPreApproved])
   @@index([createdAt])
   @@map("request")
+}
+
+model Cover {
+  id          String   @id @default(cuid())
+  eventId     String
+  cashAmount  Decimal  @db.Decimal(10, 2)
+  qrAmount    Decimal  @db.Decimal(10, 2)
+  total       Decimal  @db.Decimal(10, 2)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("CoverCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("cover")
 }
 
 enum RequestStatus {
